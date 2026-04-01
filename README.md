@@ -247,6 +247,8 @@ http://localhost:3333/signup
 * Domain-based intelligent autofill
 * Advanced UX with minimal intrusion
 * Works across multiple websites dynamically
+* Duplicate password detection. Warn the user if they're saving the same password across multiple sites — password reuse is one of the biggest security risks.
+* Password age tracking. Show how old a saved password is and prompt users to update passwords that are 90+ days old.
 
 ---
 

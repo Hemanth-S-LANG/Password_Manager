@@ -154,6 +154,35 @@
     }
   }
 
+  // ── Keyboard shortcut: Ctrl+Shift+L ──────────────────────────────────────
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type !== "SHORTCUT_AUTOFILL") return;
+
+    const pair = findLoginPair();
+    if (!pair) {
+      showToast("No login form detected on this page.");
+      return;
+    }
+
+    safeSendMessage({ type: "FETCH_CREDENTIALS_FOR_DOMAIN", domain: DOMAIN }, (res) => {
+      if (!res?.ok || !res.data?.length) {
+        showToast("No saved credentials for this site.");
+        return;
+      }
+      if (res.data.length === 1) {
+        // Single credential — fill directly, no banner needed
+        const c = res.data[0];
+        setNativeValue(pair.userField, c.username);
+        setNativeValue(pair.pwField,   c.password);
+        showToast("✅ Credentials filled!");
+      } else {
+        // Multiple credentials — show picker
+        autofillDone = false;
+        showAutofillBanner(res.data, pair.userField, pair.pwField);
+      }
+    });
+  });
+
   // ── Snapshot credentials as user types ───────────────────────────────────
 
   function watchPasswordField(pwField) {
@@ -542,6 +571,62 @@
     setTimeout(() => banner?.remove(), 20000);
   }
 
+  // ── Duplicate password warning ────────────────────────────────────────────
+
+  function showDuplicateWarning(duplicate, payload) {
+    document.getElementById("kv-dup-banner")?.remove();
+
+    const banner = document.createElement("div");
+    banner.id = "kv-dup-banner";
+    banner.innerHTML = `
+      <div style="position:fixed;top:16px;right:16px;z-index:2147483647;
+        background:#1e1b4b;color:#fff;border-radius:12px;padding:14px 18px;
+        font-family:system-ui,sans-serif;font-size:14px;
+        box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:290px;max-width:350px;
+        border:1px solid #f59e0b;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:20px;">⚠️</span>
+          <strong style="font-size:14px;color:#fbbf24;">Password reuse detected!</strong>
+          <button id="kv-dup-close" style="margin-left:auto;background:none;border:none;
+            color:#a5b4fc;cursor:pointer;font-size:18px;line-height:1;">&#215;</button>
+        </div>
+        <div style="background:#451a03;border:1px solid #92400e;border-radius:8px;
+          padding:8px 10px;margin-bottom:10px;font-size:12px;color:#fcd34d;">
+          You're using the same password on<br>
+          <strong>${escHtml(duplicate.website)}</strong>
+          (${escHtml(duplicate.username)}).<br>
+          <span style="opacity:.8;">Reusing passwords is a security risk.</span>
+        </div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:10px;">
+          Save anyway or go back and use a unique password.
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="kv-dup-save" style="flex:1;background:#d97706;color:#fff;border:none;
+            border-radius:8px;padding:8px;cursor:pointer;font-size:12px;font-weight:600;">
+            Save anyway
+          </button>
+          <button id="kv-dup-cancel" style="flex:1;background:#312e81;color:#c7d2fe;border:none;
+            border-radius:8px;padding:8px;cursor:pointer;font-size:12px;">
+            Cancel
+          </button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(banner);
+
+    banner.querySelector("#kv-dup-close").onclick  = () => banner.remove();
+    banner.querySelector("#kv-dup-cancel").onclick = () => banner.remove();
+    banner.querySelector("#kv-dup-save").onclick   = () => {
+      banner.remove();
+      safeSendMessage({ type: "SAVE_CREDENTIAL_CONFIRMED", payload }, (res) => {
+        if (res?.ok) showToast("Password saved!");
+        else showToast("Save failed — is the backend running?");
+      });
+    };
+
+    setTimeout(() => banner?.remove(), 30000);
+  }
+
   // ── Save banner ───────────────────────────────────────────────────────────
 
   function showSaveBanner(username, password) {
@@ -588,8 +673,13 @@
           payload: { website: DOMAIN, username, password, category: "Others" },
         },
         (res) => {
-          if (res?.ok) showToast("Password saved!");
-          else showToast("Save failed — is the backend running?");
+          if (res?.duplicate) {
+            showDuplicateWarning(res.duplicate, res.payload);
+          } else if (res?.ok) {
+            showToast("Password saved!");
+          } else {
+            showToast("Save failed — is the backend running?");
+          }
         }
       );
     };
@@ -601,24 +691,30 @@
   function showAutofillBanner(credentials, userField, pwField) {
     document.getElementById("kv-fill-banner")?.remove();
 
+    const isSingle = credentials.length === 1;
+    const title = isSingle ? "Autofill password?" : `${credentials.length} accounts found`;
+    const subtitle = isSingle ? "" :
+      `<div style="color:#818cf8;font-size:11px;margin-bottom:10px;">Choose which account to fill</div>`;
+
     const banner = document.createElement("div");
     banner.id = "kv-fill-banner";
     banner.innerHTML = `
       <div style="position:fixed;top:16px;right:16px;z-index:2147483647;
         background:#1e1b4b;color:#fff;border-radius:12px;padding:14px 18px;
         font-family:system-ui,sans-serif;font-size:14px;
-        box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:280px;max-width:340px;
+        box-shadow:0 8px 32px rgba(0,0,0,.45);min-width:290px;max-width:360px;
         border:1px solid #4f46e5;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="font-size:20px;">&#128273;</span>
-          <strong style="font-size:15px;">Autofill password?</strong>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:18px;">&#128273;</span>
+          <strong style="font-size:15px;">${title}</strong>
           <button id="kv-fill-close" style="margin-left:auto;background:none;border:none;
             color:#a5b4fc;cursor:pointer;font-size:18px;line-height:1;">&#215;</button>
         </div>
+        ${subtitle}
         <div id="kv-cred-list" style="display:flex;flex-direction:column;gap:6px;
-          margin-bottom:12px;max-height:160px;overflow-y:auto;"></div>
-        <button id="kv-fill-cancel" style="width:100%;background:#312e81;color:#c7d2fe;
-          border:none;border-radius:8px;padding:8px;cursor:pointer;font-size:13px;">
+          margin-bottom:10px;max-height:220px;overflow-y:auto;"></div>
+        <button id="kv-fill-cancel" style="width:100%;background:#312e81;color:#6b7280;
+          border:none;border-radius:8px;padding:7px;cursor:pointer;font-size:12px;">
           Cancel
         </button>
       </div>`;
@@ -626,28 +722,60 @@
     document.body.appendChild(banner);
 
     const list = banner.querySelector("#kv-cred-list");
+
     credentials.forEach((c) => {
-      const btn = document.createElement("button");
-      btn.style.cssText =
-        "background:#312e81;color:#e0e7ff;border:none;border-radius:8px;" +
-        "padding:8px 12px;cursor:pointer;font-size:13px;text-align:left;" +
-        "display:flex;flex-direction:column;gap:2px;width:100%;margin-bottom:2px;";
-      btn.innerHTML = `
-        <span style="font-weight:600;">${escHtml(c.username)}</span>
-        <span style="opacity:.6;font-size:11px;">${escHtml(c.website)}</span>`;
-      btn.onclick = () => {
+      const row = document.createElement("button");
+      row.style.cssText =
+        "background:#0f0e1a;border:1px solid #312e81;border-radius:10px;" +
+        "padding:10px 12px;cursor:pointer;width:100%;text-align:left;" +
+        "display:flex;align-items:center;gap:10px;transition:border-color .15s;";
+
+      // Favicon
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${c.website}&sz=32`;
+      const avatarLetter = escHtml((c.username || c.website || "?").charAt(0).toUpperCase());
+
+      row.innerHTML = `
+        <div style="position:relative;flex-shrink:0;">
+          <img src="${faviconUrl}" width="28" height="28"
+            style="border-radius:6px;object-fit:contain;display:block;"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+          <div style="display:none;width:28px;height:28px;border-radius:6px;
+            background:#312e81;color:#a5b4fc;font-size:13px;font-weight:700;
+            align-items:center;justify-content:center;">${avatarLetter}</div>
+        </div>
+        <div style="flex:1;overflow:hidden;">
+          <div style="color:#e0e7ff;font-size:13px;font-weight:600;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${escHtml(c.username)}
+          </div>
+          <div style="color:#6b7280;font-size:11px;margin-top:1px;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${escHtml(c.website)}
+          </div>
+        </div>
+        <div style="background:#4f46e5;color:#fff;border-radius:6px;
+          padding:4px 10px;font-size:11px;font-weight:600;flex-shrink:0;">
+          Fill
+        </div>`;
+
+      row.onmouseenter = () => { row.style.borderColor = "#4f46e5"; };
+      row.onmouseleave = () => { row.style.borderColor = "#312e81"; };
+
+      row.onclick = () => {
         setNativeValue(userField, c.username);
-        setNativeValue(pwField, c.password);
+        setNativeValue(pwField,   c.password);
         autofillDone = true;
         banner.remove();
-        showToast("Credentials filled!");
+        showToast(`✅ Filled: ${c.username}`);
       };
-      list.appendChild(btn);
+
+      list.appendChild(row);
     });
 
-    banner.querySelector("#kv-fill-close").onclick = () => { autofillDone = true; banner.remove(); };
-    banner.querySelector("#kv-fill-cancel").onclick = () => { autofillDone = true; banner.remove(); };
-    setTimeout(() => { autofillDone = true; banner?.remove(); }, 15000);
+    const dismiss = () => { autofillDone = true; banner.remove(); };
+    banner.querySelector("#kv-fill-close").onclick  = dismiss;
+    banner.querySelector("#kv-fill-cancel").onclick = dismiss;
+    setTimeout(() => { autofillDone = true; banner?.remove(); }, 20000);
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────────

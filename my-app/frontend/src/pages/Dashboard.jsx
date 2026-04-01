@@ -18,6 +18,15 @@ export default function Dashboard({ onLock }) {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Set of passwords used more than once across different sites
+  const reusedPasswords = new Set(
+    credentials
+      .filter((c) =>
+        credentials.some((other) => other._id !== c._id && other.password === c.password)
+      )
+      .map((c) => c.password)
+  );
+
   useEffect(() => { loadCredentials(); }, []);
 
   async function loadCredentials() {
@@ -117,7 +126,7 @@ export default function Dashboard({ onLock }) {
               </div>
             ) : (
               <CredentialList credentials={credentials} search={search} activeCategory={activeCategory}
-                onDelete={handleDelete} onEdit={handleEdit} />
+                onDelete={handleDelete} onEdit={handleEdit} reusedPasswords={reusedPasswords} />
             )}
           </div>
         </div>

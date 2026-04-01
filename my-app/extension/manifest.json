@@ -33,6 +33,16 @@
     "default_title": "KeyVault"
   },
 
+  "commands": {
+    "autofill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "Autofill saved credentials on current page"
+    }
+  },
+
   "icons": {
     "16":  "icons/icon16.png",
     "48":  "icons/icon48.png",

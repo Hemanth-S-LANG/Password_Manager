@@ -8,34 +8,68 @@
 <body>
   <!-- Lock screen -->
   <div id="lock-screen" class="screen">
-    <div class="logo">🔑 KeyVault</div>
-    <p class="subtitle">Enter master password to unlock</p>
-    <input id="master-input" type="password" placeholder="Master password" autocomplete="current-password" />
-    <button id="unlock-btn" class="btn-primary">Unlock</button>
+    <div class="brand">
+      <div class="brand-icon">🔑</div>
+      <div class="brand-name">KeyVault</div>
+      <div class="brand-sub">Your encrypted password vault</div>
+    </div>
+    <input id="master-input" type="password" placeholder="Enter master password" autocomplete="current-password" />
+    <button id="unlock-btn" class="btn-primary">Unlock Vault</button>
     <p id="lock-error" class="error hidden"></p>
   </div>
 
-  <!-- Main screen -->
+  <!-- Main vault screen -->
   <div id="main-screen" class="screen hidden">
-    <div class="header">
-      <span class="logo-sm">🔑 KeyVault</span>
-      <button id="lock-btn" class="btn-icon" title="Lock">🔒</button>
+
+    <!-- Header -->
+    <div class="vault-header">
+      <div class="vault-title">🔑 KeyVault</div>
+      <div class="header-actions">
+        <span id="cred-count" class="count-badge">0</span>
+        <button id="lock-btn" class="icon-btn" title="Lock vault">🔒</button>
+      </div>
     </div>
 
-    <input id="search-input" type="text" placeholder="Search credentials…" class="search" />
-
-    <div id="current-site-section" class="section hidden">
-      <div class="section-label">This site</div>
-      <div id="current-site-list"></div>
+    <!-- This site banner -->
+    <div id="this-site-bar" class="site-bar hidden">
+      <span id="site-bar-domain" class="site-bar-domain"></span>
+      <span class="site-bar-label">credentials saved</span>
     </div>
 
-    <div class="section">
-      <div class="section-label">All credentials</div>
-      <div id="all-creds-list"></div>
+    <!-- Search -->
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input id="search-input" type="text" placeholder="Search credentials…" class="search" />
+      <button id="search-clear" class="search-clear hidden">✕</button>
     </div>
 
-    <p id="empty-msg" class="empty hidden">No credentials saved yet.</p>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="all">All</button>
+      <button class="tab-btn" data-tab="site">This Site</button>
+    </div>
+
+    <!-- Credential list -->
+    <div id="cred-list" class="cred-list"></div>
+
+    <!-- Empty state -->
+    <div id="empty-state" class="empty-state hidden">
+      <div class="empty-icon">🗝️</div>
+      <div class="empty-title">No credentials found</div>
+      <div class="empty-sub">Try a different search term</div>
+    </div>
+
+    <!-- Error -->
     <p id="main-error" class="error hidden"></p>
+  </div>
+
+  <!-- Detail / edit panel (slides in) -->
+  <div id="detail-panel" class="detail-panel hidden">
+    <div class="detail-header">
+      <button id="detail-back" class="back-btn">← Back</button>
+      <div id="detail-title" class="detail-title"></div>
+    </div>
+    <div id="detail-body" class="detail-body"></div>
   </div>
 
   <script src="popup.js"></script>

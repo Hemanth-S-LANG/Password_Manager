@@ -12,7 +12,7 @@ function groupByCategory(credentials) {
   }, {});
 }
 
-export default function CredentialList({ credentials, search, activeCategory, onDelete, onEdit }) {
+export default function CredentialList({ credentials, search, activeCategory, onDelete, onEdit, reusedPasswords = new Set() }) {
   // Step 1: filter by search term (website or username)
   const searchFiltered = credentials.filter(
     (c) =>
@@ -54,7 +54,8 @@ export default function CredentialList({ credentials, search, activeCategory, on
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {items.map((cred) => (
-                  <CredentialCard key={cred._id} credential={cred} onDelete={onDelete} onEdit={onEdit} />
+                  <CredentialCard key={cred._id} credential={cred} onDelete={onDelete} onEdit={onEdit}
+                    isReused={reusedPasswords.has(cred.password)} />
                 ))}
               </div>
             </section>
@@ -68,7 +69,8 @@ export default function CredentialList({ credentials, search, activeCategory, on
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {filtered.map((cred) => (
-        <CredentialCard key={cred._id} credential={cred} onDelete={onDelete} onEdit={onEdit} />
+        <CredentialCard key={cred._id} credential={cred} onDelete={onDelete} onEdit={onEdit}
+          isReused={reusedPasswords.has(cred.password)} />
       ))}
     </div>
   );

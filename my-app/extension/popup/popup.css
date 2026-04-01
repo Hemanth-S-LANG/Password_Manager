@@ -1,0 +1,201 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 320px;
+  min-height: 200px;
+  background: #0f0e1a;
+  color: #e0e7ff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+
+.screen { padding: 20px; }
+.hidden { display: none !important; }
+
+/* ── Auth / Lock screen ── */
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #a5b4fc;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.tab-row {
+  display: flex;
+  background: #1e1b4b;
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 14px;
+  gap: 3px;
+}
+.tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #6b7280;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .15s;
+}
+.tab.active {
+  background: #4f46e5;
+  color: #fff;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  background: #1e1b4b;
+  border: 1px solid #312e81;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #e0e7ff;
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 8px;
+}
+input:focus { border-color: #6366f1; }
+
+.btn-primary {
+  width: 100%;
+  background: #4f46e5;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  margin-top: 2px;
+}
+.btn-primary:hover { background: #4338ca; }
+.btn-primary:disabled { opacity: .5; cursor: default; }
+
+.error {
+  color: #f87171;
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.switch-link {
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 10px;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: #818cf8;
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+/* ── Main screen ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.logo-sm { font-size: 15px; font-weight: 700; color: #a5b4fc; }
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: .6;
+  transition: opacity .15s;
+  color: #e0e7ff;
+}
+.btn-icon:hover { opacity: 1; }
+
+.search {
+  width: 100%;
+  background: #1e1b4b;
+  border: 1px solid #312e81;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #e0e7ff;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 14px;
+}
+.search:focus { border-color: #6366f1; }
+
+.section { margin-bottom: 12px; }
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6366f1;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+
+/* ── Credential card ── */
+.cred-card {
+  background: #1e1b4b;
+  border: 1px solid #312e81;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cred-info { flex: 1; overflow: hidden; }
+.cred-site {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c7d2fe;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cred-user {
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cred-actions { display: flex; gap: 4px; }
+.btn-sm {
+  background: #312e81;
+  color: #a5b4fc;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-sm:hover { background: #4f46e5; color: #fff; }
+
+.empty {
+  color: #4b5563;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+/* ── Loading ── */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #312e81;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 16px auto 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

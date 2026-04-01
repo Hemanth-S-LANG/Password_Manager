@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Extension Test – Login Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, sans-serif;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: 360px;
+    }
+    h2 { color: #e2e8f0; margin-bottom: 6px; font-size: 22px; }
+    p  { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    label { display: block; color: #94a3b8; font-size: 13px; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e2e8f0;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    input:focus { border-color: #6366f1; }
+    button {
+      width: 100%;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 11px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { background: #4338ca; }
+    #result {
+      margin-top: 16px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    .success { background: #14532d; color: #86efac; display: block !important; }
+    .info    { background: #1e3a5f; color: #93c5fd; display: block !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🔑 Test Login Page</h2>
+    <p>Use this to test the KeyVault extension save &amp; autofill features.</p>
+
+    <form id="login-form">
+      <label for="email">Email / Username</label>
+      <input
+        id="email"
+        type="email"
+        name="email"
+        placeholder="you@example.com"
+        autocomplete="username"
+      />
+
+      <label for="password">Password</label>
+      <input
+        id="password"
+        type="password"
+        name="password"
+        placeholder="••••••••"
+        autocomplete="current-password"
+      />
+
+      <button type="submit">Sign in</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    document.getElementById("login-form").addEventListener("submit", (e) => {
+      e.preventDefault(); // stay on page so the save banner can appear
+      const email = document.getElementById("email").value;
+      const result = document.getElementById("result");
+      result.textContent = `✅ Form submitted as: ${email}`;
+      result.className = "success";
+    });
+  </script>
+</body>
+</html>

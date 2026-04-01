@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--
+  Open this file in a browser, then right-click each canvas and "Save image as"
+  to get icon16.png, icon48.png, icon128.png for the extension.
+-->
+<html>
+<body style="background:#111;display:flex;gap:20px;padding:20px;align-items:flex-end;">
+<script>
+  [16, 48, 128].forEach(size => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    canvas.title = `icon${size}.png`;
+    canvas.style.cursor = "pointer";
+    const ctx = canvas.getContext("2d");
+
+    // Background
+    ctx.fillStyle = "#1e1b4b";
+    ctx.beginPath();
+    ctx.roundRect(0, 0, size, size, size * 0.18);
+    ctx.fill();
+
+    // Key symbol
+    ctx.fillStyle = "#a5b4fc";
+    ctx.font = `bold ${size * 0.55}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🔑", size / 2, size / 2);
+
+    const label = document.createElement("div");
+    label.textContent = `icon${size}.png`;
+    label.style.cssText = "color:#fff;font:12px sans-serif;text-align:center;margin-top:4px;";
+
+    const wrap = document.createElement("div");
+    wrap.appendChild(canvas);
+    wrap.appendChild(label);
+    document.body.appendChild(wrap);
+
+    // Auto-download
+    canvas.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.download = `icon${size}.png`;
+      a.href = canvas.toDataURL();
+      a.click();
+    });
+  });
+</script>
+</body>
+</html>

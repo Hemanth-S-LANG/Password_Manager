@@ -1,0 +1,16 @@
+# Environment variables — never push these
+my-app/backend/.env
+
+# Dependencies
+node_modules/
+my-app/backend/node_modules/
+my-app/frontend/node_modules/
+Front-End/node_modules/
+
+# Build output
+my-app/frontend/dist/
+my-app/frontend/.vite/
+
+# OS files
+.DS_Store
+Thumbs.db

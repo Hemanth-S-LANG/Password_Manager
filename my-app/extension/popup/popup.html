@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>KeyVault</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Lock screen -->
+  <div id="lock-screen" class="screen">
+    <div class="logo">🔑 KeyVault</div>
+    <p class="subtitle">Enter master password to unlock</p>
+    <input id="master-input" type="password" placeholder="Master password" autocomplete="current-password" />
+    <button id="unlock-btn" class="btn-primary">Unlock</button>
+    <p id="lock-error" class="error hidden"></p>
+  </div>
+
+  <!-- Main screen -->
+  <div id="main-screen" class="screen hidden">
+    <div class="header">
+      <span class="logo-sm">🔑 KeyVault</span>
+      <button id="lock-btn" class="btn-icon" title="Lock">🔒</button>
+    </div>
+
+    <input id="search-input" type="text" placeholder="Search credentials…" class="search" />
+
+    <div id="current-site-section" class="section hidden">
+      <div class="section-label">This site</div>
+      <div id="current-site-list"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">All credentials</div>
+      <div id="all-creds-list"></div>
+    </div>
+
+    <p id="empty-msg" class="empty hidden">No credentials saved yet.</p>
+    <p id="main-error" class="error hidden"></p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

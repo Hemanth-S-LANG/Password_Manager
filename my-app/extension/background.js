@@ -144,25 +144,23 @@ async function deleteCredential(id) {
 }
 
 // ── Lockout config ────────────────────────────────────────────────────────────
-// After every 5 wrong attempts, cooldown escalates: 1 min → 5 min → 30 min (stays)
-const LOCKOUT_TIERS = [1 * 60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000]; // ms
+// Every 5 wrong attempts triggers a lockout: 1st→1min, 2nd→5min, 3rd+→30min
+const LOCKOUT_DURATIONS = [1 * 60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000];
 
-async function getLockoutState() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["failedAttempts", "lockoutUntil", "lockoutTier"], resolve);
-  });
+function getStorage(keys) {
+  return new Promise((resolve) => chrome.storage.local.get(keys, resolve));
 }
-
-async function setLockoutState(data) {
+function setStorage(data) {
   return new Promise((resolve) => chrome.storage.local.set(data, resolve));
 }
 
 async function verifyMaster(password) {
-  // Check lockout before even hitting the API
-  const state = await getLockoutState();
-  const now = Date.now();
-  if (state.lockoutUntil && now < state.lockoutUntil) {
-    return { ok: false, locked: true, lockoutUntil: state.lockoutUntil };
+  const { failedAttempts = 0, lockoutUntil = 0, lockoutCount = 0 } =
+    await getStorage(["failedAttempts", "lockoutUntil", "lockoutCount"]);
+
+  // Block immediately if still locked
+  if (lockoutUntil > Date.now()) {
+    return { ok: false, locked: true, lockoutUntil };
   }
 
   try {
@@ -174,43 +172,42 @@ async function verifyMaster(password) {
     const data = await res.json();
 
     if (res.ok && data.success) {
-      // Success — reset lockout state
-      await setLockoutState({ failedAttempts: 0, lockoutUntil: 0, lockoutTier: state.lockoutTier || 0 });
+      // Reset everything on success
+      await setStorage({ failedAttempts: 0, lockoutUntil: 0, lockoutCount: 0 });
       return { ok: true, data };
-    } else {
-      // Failed attempt — increment counter
-      const attempts = (state.failedAttempts || 0) + 1;
-      let lockoutUntil = state.lockoutUntil || 0;
-      let tier = state.lockoutTier || 0;
-
-      if (attempts % 5 === 0) {
-        // Escalate tier (cap at last tier)
-        tier = Math.min(tier + (attempts === 5 ? 0 : 1), LOCKOUT_TIERS.length - 1);
-        // First 5 attempts use tier 0, next 5 use tier 1, etc.
-        const tierIndex = Math.min(Math.floor(attempts / 5) - 1, LOCKOUT_TIERS.length - 1);
-        lockoutUntil = Date.now() + LOCKOUT_TIERS[tierIndex];
-        tier = tierIndex + 1; // next tier for next lockout
-        await setLockoutState({ failedAttempts: attempts, lockoutUntil, lockoutTier: tier });
-        return { ok: false, data, locked: true, lockoutUntil };
-      }
-
-      await setLockoutState({ failedAttempts: attempts, lockoutUntil, lockoutTier: tier });
-      const attemptsLeft = 5 - (attempts % 5);
-      return { ok: false, data, attemptsLeft };
     }
+
+    // Wrong password
+    const newAttempts = failedAttempts + 1;
+    const attemptsLeft = 5 - (newAttempts % 5);
+
+    if (newAttempts % 5 === 0) {
+      // Trigger lockout — pick duration tier based on how many lockouts have happened
+      const tierIndex = Math.min(lockoutCount, LOCKOUT_DURATIONS.length - 1);
+      const newLockoutUntil = Date.now() + LOCKOUT_DURATIONS[tierIndex];
+      await setStorage({
+        failedAttempts: newAttempts,
+        lockoutUntil: newLockoutUntil,
+        lockoutCount: lockoutCount + 1,
+      });
+      return { ok: false, locked: true, lockoutUntil: newLockoutUntil };
+    }
+
+    await setStorage({ failedAttempts: newAttempts, lockoutUntil: 0, lockoutCount });
+    return { ok: false, attemptsLeft };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 }
 
 async function getLockoutStatus() {
-  const state = await getLockoutState();
-  const now = Date.now();
-  if (state.lockoutUntil && now < state.lockoutUntil) {
-    return { locked: true, lockoutUntil: state.lockoutUntil };
+  const { failedAttempts = 0, lockoutUntil = 0 } =
+    await getStorage(["failedAttempts", "lockoutUntil"]);
+  if (lockoutUntil > Date.now()) {
+    return { locked: true, lockoutUntil };
   }
-  const attemptsLeft = 5 - ((state.failedAttempts || 0) % 5);
-  return { locked: false, attemptsLeft: attemptsLeft === 5 ? 5 : attemptsLeft };
+  const attemptsUsed = failedAttempts % 5;
+  return { locked: false, attemptsLeft: attemptsUsed === 0 ? 5 : 5 - attemptsUsed };
 }
 
 async function getAuthStatus() {

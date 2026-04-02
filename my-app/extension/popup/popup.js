@@ -93,17 +93,23 @@ async function handleUnlock() {
   if (!password) return;
   unlockBtn.textContent = "Verifying…";
   unlockBtn.disabled = true;
+  masterInput.disabled = true;
+
   const res = await sendMsg({ type: "VERIFY_MASTER", password });
-  unlockBtn.textContent = "Unlock Vault";
-  unlockBtn.disabled = false;
 
   if (res?.ok && res.data?.success) {
     hideError(lockError);
     clearLockoutUI();
     showMainScreen();
   } else if (res?.locked) {
+    // Stay disabled — countdown will re-enable when done
     startLockoutCountdown(res.lockoutUntil);
+    unlockBtn.textContent = "Unlock Vault";
   } else {
+    // Re-enable only on a normal wrong-password (not lockout)
+    unlockBtn.textContent = "Unlock Vault";
+    unlockBtn.disabled = false;
+    masterInput.disabled = false;
     const left = res?.attemptsLeft;
     const msg = left != null
       ? `Incorrect password. ${left} attempt${left !== 1 ? "s" : ""} remaining before lockout.`
@@ -144,7 +150,9 @@ function startLockoutCountdown(lockoutUntil) {
 function clearLockoutUI() {
   clearInterval(_countdownTimer);
   masterInput.disabled = false;
+  masterInput.value = "";
   unlockBtn.disabled = false;
+  unlockBtn.textContent = "Unlock Vault";
   lockError.classList.remove("lockout");
   hideError(lockError);
 }

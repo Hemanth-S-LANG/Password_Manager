@@ -361,3 +361,22 @@ input:focus { border-color: #6366f1; }
   transition: opacity .3s;
   pointer-events: none;
 }
+
+/* ── Lockout state ── */
+#lock-screen input:disabled,
+#lock-screen button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.error.lockout {
+  color: #fbbf24;
+  background: #1c1400;
+  border: 1px solid #78350f;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-top: 10px;
+  text-align: center;
+  line-height: 1.5;
+}

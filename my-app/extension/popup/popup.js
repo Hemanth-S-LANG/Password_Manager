@@ -57,7 +57,18 @@ function getFavicon(site) {
   const res = await sendMsg({ type: "GET_AUTH_STATUS" });
   if (!res?.ok) { showError(lockError, "Cannot reach backend. Is the server running?"); return; }
   if (!res.data.hasPassword) { showError(lockError, "No master password set. Open the dashboard first."); return; }
-  showLockScreen();
+
+  // Check if currently locked out
+  const lockStatus = await sendMsg({ type: "GET_LOCKOUT_STATUS" });
+  if (lockStatus?.locked) {
+    showLockScreen();
+    startLockoutCountdown(lockStatus.lockoutUntil);
+  } else {
+    showLockScreen();
+    if (lockStatus && lockStatus.attemptsLeft < 5) {
+      showError(lockError, `${lockStatus.attemptsLeft} attempt${lockStatus.attemptsLeft !== 1 ? "s" : ""} remaining before lockout.`);
+    }
+  }
 })();
 
 // ── Lock / Unlock ─────────────────────────────────────────────────────────────
@@ -85,13 +96,57 @@ async function handleUnlock() {
   const res = await sendMsg({ type: "VERIFY_MASTER", password });
   unlockBtn.textContent = "Unlock Vault";
   unlockBtn.disabled = false;
+
   if (res?.ok && res.data?.success) {
     hideError(lockError);
+    clearLockoutUI();
     showMainScreen();
+  } else if (res?.locked) {
+    startLockoutCountdown(res.lockoutUntil);
   } else {
-    showError(lockError, "Incorrect master password.");
+    const left = res?.attemptsLeft;
+    const msg = left != null
+      ? `Incorrect password. ${left} attempt${left !== 1 ? "s" : ""} remaining before lockout.`
+      : "Incorrect master password.";
+    showError(lockError, msg);
     masterInput.select();
   }
+}
+
+// ── Lockout countdown UI ──────────────────────────────────────────────────────
+let _countdownTimer = null;
+
+function startLockoutCountdown(lockoutUntil) {
+  masterInput.disabled = true;
+  unlockBtn.disabled = true;
+  clearInterval(_countdownTimer);
+  lockError.classList.add("lockout");
+
+  function tick() {
+    const remaining = lockoutUntil - Date.now();
+    if (remaining <= 0) {
+      clearInterval(_countdownTimer);
+      clearLockoutUI();
+      lockError.classList.remove("lockout");
+      showError(lockError, "You may try again now.");
+      return;
+    }
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    showError(lockError, `🔒 Too many failed attempts. Try again in ${timeStr}.`);
+  }
+
+  tick();
+  _countdownTimer = setInterval(tick, 1000);
+}
+
+function clearLockoutUI() {
+  clearInterval(_countdownTimer);
+  masterInput.disabled = false;
+  unlockBtn.disabled = false;
+  lockError.classList.remove("lockout");
+  hideError(lockError);
 }
 
 lockBtn.addEventListener("click", showLockScreen);

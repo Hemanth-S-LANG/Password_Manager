@@ -32,6 +32,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "GET_AUTH_STATUS":
       getAuthStatus().then(sendResponse);
       break;
+    case "GET_LOCKOUT_STATUS":
+      getLockoutStatus().then(sendResponse);
+      break;
 
     case "DELETE_CREDENTIAL":
       deleteCredential(message.id).then(sendResponse);
@@ -140,7 +143,28 @@ async function deleteCredential(id) {
   }
 }
 
+// ── Lockout config ────────────────────────────────────────────────────────────
+// After every 5 wrong attempts, cooldown escalates: 1 min → 5 min → 30 min (stays)
+const LOCKOUT_TIERS = [1 * 60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000]; // ms
+
+async function getLockoutState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["failedAttempts", "lockoutUntil", "lockoutTier"], resolve);
+  });
+}
+
+async function setLockoutState(data) {
+  return new Promise((resolve) => chrome.storage.local.set(data, resolve));
+}
+
 async function verifyMaster(password) {
+  // Check lockout before even hitting the API
+  const state = await getLockoutState();
+  const now = Date.now();
+  if (state.lockoutUntil && now < state.lockoutUntil) {
+    return { ok: false, locked: true, lockoutUntil: state.lockoutUntil };
+  }
+
   try {
     const res = await fetch(`${API_BASE}/auth/verify`, {
       method: "POST",
@@ -148,10 +172,45 @@ async function verifyMaster(password) {
       body: JSON.stringify({ password }),
     });
     const data = await res.json();
-    return { ok: res.ok, data };
+
+    if (res.ok && data.success) {
+      // Success — reset lockout state
+      await setLockoutState({ failedAttempts: 0, lockoutUntil: 0, lockoutTier: state.lockoutTier || 0 });
+      return { ok: true, data };
+    } else {
+      // Failed attempt — increment counter
+      const attempts = (state.failedAttempts || 0) + 1;
+      let lockoutUntil = state.lockoutUntil || 0;
+      let tier = state.lockoutTier || 0;
+
+      if (attempts % 5 === 0) {
+        // Escalate tier (cap at last tier)
+        tier = Math.min(tier + (attempts === 5 ? 0 : 1), LOCKOUT_TIERS.length - 1);
+        // First 5 attempts use tier 0, next 5 use tier 1, etc.
+        const tierIndex = Math.min(Math.floor(attempts / 5) - 1, LOCKOUT_TIERS.length - 1);
+        lockoutUntil = Date.now() + LOCKOUT_TIERS[tierIndex];
+        tier = tierIndex + 1; // next tier for next lockout
+        await setLockoutState({ failedAttempts: attempts, lockoutUntil, lockoutTier: tier });
+        return { ok: false, data, locked: true, lockoutUntil };
+      }
+
+      await setLockoutState({ failedAttempts: attempts, lockoutUntil, lockoutTier: tier });
+      const attemptsLeft = 5 - (attempts % 5);
+      return { ok: false, data, attemptsLeft };
+    }
   } catch (err) {
     return { ok: false, error: err.message };
   }
+}
+
+async function getLockoutStatus() {
+  const state = await getLockoutState();
+  const now = Date.now();
+  if (state.lockoutUntil && now < state.lockoutUntil) {
+    return { locked: true, lockoutUntil: state.lockoutUntil };
+  }
+  const attemptsLeft = 5 - ((state.failedAttempts || 0) % 5);
+  return { locked: false, attemptsLeft: attemptsLeft === 5 ? 5 : attemptsLeft };
 }
 
 async function getAuthStatus() {

@@ -247,8 +247,17 @@ http://localhost:3333/signup
 * Domain-based intelligent autofill
 * Advanced UX with minimal intrusion
 * Works across multiple websites dynamically
-* Duplicate password detection. Warn the user if they're saving the same password across multiple sites — password reuse is one of the biggest security risks.
-* Password age tracking. Show how old a saved password is and prompt users to update passwords that are 90+ days old.
+* Duplicate password detection. Warning the user if they're saving the same password across multiple sites — password reuse is one of the biggest security risks.
+* Password age tracking. Showing how old a saved password is and prompt users to update passwords that are 90+ days old.
+* Accessibility (a11y). Adding proper ARIA labels, keyboard navigation, and focus management in the popup UI.
+* Localization (i18n). Structuring my UI strings to support multiple languages from the start.
+* Password audit score. Give the vault an overall "security score" out of 100.
+* Usage history per credential. Show when a credential was last used, last modified, and how many times it's been autofilled — helps users identify stale or unused entries.
+* Analytics & Insights
+* Vault statistics. Show the user fun, useful stats right in the popup:
+Total saved passwords
+Number of strong vs weak passwords
+
 
 ---
 

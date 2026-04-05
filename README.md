@@ -257,6 +257,12 @@ http://localhost:3333/signup
 * Vault statistics. Show the user fun, useful stats right in the popup:
 Total saved passwords
 Number of strong vs weak passwords
+* Bulk actions. Let users select multiple credentials via checkboxes and delete them all at once, or bulk-move them to a different category.
+* Keyboard navigation in popup. In your popup.js, credentials are listed as cards. Add ↑ ↓ arrow key navigation between cards so power users never need the mouse.
+* Notifications & Reminders:Stale password alerts on extension icon. Use Chrome's chrome.action.setBadgeText to show a red badge count on the extension icon when passwords are older than 90 days or flagged as weak. Users see this passively without opening the vault.
+* Login attempt log. Store a local log of every master password attempt — timestamp, success/failure. Showing this in a "Security Activity" section so the user can see if someone tried to access their vault while they were away.
+* Extension icon state. Change the extension icon color based on state — green when unlocked, gray when locked, red when backend is unreachable using chrome.action.setIcon.
+* Notes field per credential. Adding an optional free-text notes field to the Credential model — useful for storing security questions, account recovery codes, or PINs associated with a credential.
 
 
 ---

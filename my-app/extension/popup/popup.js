@@ -1,3 +1,11 @@
+// ── i18n helper ───────────────────────────────────────────────────────────────
+// Wraps chrome.i18n.getMessage with substitution support.
+// Falls back to the key itself if the message isn't found (safe for dev).
+function t(key, ...subs) {
+  const msg = chrome.i18n.getMessage(key, subs);
+  return msg || key;
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const lockScreen    = document.getElementById("lock-screen");
 const mainScreen    = document.getElementById("main-screen");
@@ -54,11 +62,17 @@ function getFavicon(site) {
     try { currentDomain = new URL(tab.url).hostname; } catch {}
   }
 
-  const res = await sendMsg({ type: "GET_AUTH_STATUS" });
-  if (!res?.ok) { showError(lockError, "Cannot reach backend. Is the server running?"); return; }
-  if (!res.data.hasPassword) { showError(lockError, "No master password set. Open the dashboard first."); return; }
+  // First check if backend is reachable
+  const health = await sendMsg({ type: "CHECK_BACKEND" });
+  if (!health?.ok) {
+    showOfflineScreen();
+    return;
+  }
 
-  // Check if currently locked out
+  const res = await sendMsg({ type: "GET_AUTH_STATUS" });
+  if (!res?.ok) { showOfflineScreen(); return; }
+  if (!res.data.hasPassword) { showError(lockError, t("errNoPassword")); showLockScreen(); return; }
+
   const lockStatus = await sendMsg({ type: "GET_LOCKOUT_STATUS" });
   if (lockStatus?.locked) {
     showLockScreen();
@@ -66,7 +80,7 @@ function getFavicon(site) {
   } else {
     showLockScreen();
     if (lockStatus && lockStatus.attemptsLeft < 5) {
-      showError(lockError, `${lockStatus.attemptsLeft} attempt${lockStatus.attemptsLeft !== 1 ? "s" : ""} remaining before lockout.`);
+      showError(lockError, t("errAttemptsLeft", String(lockStatus.attemptsLeft)));
     }
   }
 })();
@@ -75,14 +89,27 @@ function getFavicon(site) {
 function showLockScreen() {
   lockScreen.classList.remove("hidden");
   mainScreen.classList.add("hidden");
+  document.getElementById("offline-screen").classList.add("hidden");
   masterInput.value = "";
+  sendMsg({ type: "SET_ICON_STATE", state: "locked" });
+  // Return focus to the password input
   setTimeout(() => masterInput.focus(), 50);
 }
 
 function showMainScreen() {
   lockScreen.classList.add("hidden");
   mainScreen.classList.remove("hidden");
+  document.getElementById("offline-screen").classList.add("hidden");
   loadCredentials();
+  // Move focus to search so keyboard users can start immediately
+  setTimeout(() => searchInput.focus(), 50);
+}
+
+function showOfflineScreen() {
+  lockScreen.classList.add("hidden");
+  mainScreen.classList.add("hidden");
+  document.getElementById("offline-screen").classList.remove("hidden");
+  sendMsg({ type: "SET_ICON_STATE", state: "offline" });
 }
 
 unlockBtn.addEventListener("click", handleUnlock);
@@ -91,7 +118,7 @@ masterInput.addEventListener("keydown", (e) => { if (e.key === "Enter") handleUn
 async function handleUnlock() {
   const password = masterInput.value.trim();
   if (!password) return;
-  unlockBtn.textContent = "Verifying…";
+  unlockBtn.textContent = t("verifying");
   unlockBtn.disabled = true;
   masterInput.disabled = true;
 
@@ -101,21 +128,21 @@ async function handleUnlock() {
     hideError(lockError);
     clearLockoutUI();
     showMainScreen();
+    // Refresh badge immediately after unlock so stale count is up to date
+    sendMsg({ type: "REFRESH_BADGE" });
+    sendMsg({ type: "SET_ICON_STATE", state: "unlocked" });
   } else if (res?.locked) {
-    // Stay disabled — countdown will re-enable when done
     startLockoutCountdown(res.lockoutUntil);
-    unlockBtn.textContent = "Unlock Vault";
+    unlockBtn.textContent = t("unlockVault");
   } else {
-    // Re-enable only on a normal wrong-password (not lockout)
-    unlockBtn.textContent = "Unlock Vault";
+    unlockBtn.textContent = t("unlockVault");
     unlockBtn.disabled = false;
     masterInput.disabled = false;
     const left = res?.attemptsLeft;
-    const msg = left != null
-      ? `Incorrect password. ${left} attempt${left !== 1 ? "s" : ""} remaining before lockout.`
-      : "Incorrect master password.";
+    const msg = left != null ? t("errAttemptsLeft", String(left)) : t("errIncorrect");
     showError(lockError, msg);
     masterInput.select();
+    masterInput.focus();
   }
 }
 
@@ -134,13 +161,14 @@ function startLockoutCountdown(lockoutUntil) {
       clearInterval(_countdownTimer);
       clearLockoutUI();
       lockError.classList.remove("lockout");
-      showError(lockError, "You may try again now.");
+      showError(lockError, t("msgTryAgain"));
+      masterInput.focus();
       return;
     }
     const mins = Math.floor(remaining / 60000);
     const secs = Math.floor((remaining % 60000) / 1000);
     const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-    showError(lockError, `🔒 Too many failed attempts. Try again in ${timeStr}.`);
+    showError(lockError, t("errLockout", timeStr));
   }
 
   tick();
@@ -152,27 +180,69 @@ function clearLockoutUI() {
   masterInput.disabled = false;
   masterInput.value = "";
   unlockBtn.disabled = false;
-  unlockBtn.textContent = "Unlock Vault";
+  unlockBtn.textContent = t("unlockVault");
   lockError.classList.remove("lockout");
   hideError(lockError);
 }
 
-lockBtn.addEventListener("click", showLockScreen);
+lockBtn.addEventListener("click", () => {
+  showLockScreen();
+  sendMsg({ type: "SET_ICON_STATE", state: "locked" });
+});
+
+// ── Offline retry button ──────────────────────────────────────────────────────
+document.getElementById("retry-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("retry-btn");
+  btn.disabled = true;
+  btn.textContent = "Checking...";
+
+  const health = await sendMsg({ type: "CHECK_BACKEND" });
+  if (!health?.ok) {
+    btn.disabled = false;
+    btn.textContent = "↺ Retry Connection";
+    // Flash red to signal still offline
+    btn.style.borderColor = "#ef4444";
+    btn.style.color = "#f87171";
+    setTimeout(() => {
+      btn.style.borderColor = "";
+      btn.style.color = "";
+    }, 1200);
+    return;
+  }
+
+  // Backend is back — re-run normal init flow
+  const res = await sendMsg({ type: "GET_AUTH_STATUS" });
+  if (!res?.ok || !res.data?.hasPassword) {
+    btn.disabled = false;
+    btn.textContent = "↺ Retry Connection";
+    return;
+  }
+  const lockStatus = await sendMsg({ type: "GET_LOCKOUT_STATUS" });
+  if (lockStatus?.locked) {
+    showLockScreen();
+    startLockoutCountdown(lockStatus.lockoutUntil);
+  } else {
+    showLockScreen();
+  }
+});
 
 // ── Load credentials ──────────────────────────────────────────────────────────
 async function loadCredentials() {
   const res = await sendMsg({ type: "FETCH_ALL_CREDENTIALS" });
-  if (!res?.ok) { showError(mainError, "Failed to load credentials."); return; }
+  if (!res?.ok) { showError(mainError, t("loadFailed")); return; }
   allCredentials = res.data || [];
-  credCount.textContent = allCredentials.length;
 
-  // Show "this site" bar if we have credentials for current domain
+  // Update count badge with accessible label
+  credCount.textContent = allCredentials.length;
+  credCount.setAttribute("aria-label", `${allCredentials.length} credentials stored`);
+
   const siteCreds = getSiteCreds();
   if (siteCreds.length > 0 && currentDomain) {
     thisSiteBar.classList.remove("hidden");
     siteBarDomain.textContent = currentDomain;
     thisSiteBar.querySelector(".site-bar-label").textContent =
       `— ${siteCreds.length} credential${siteCreds.length > 1 ? "s" : ""} saved`;
+    thisSiteBar.setAttribute("aria-label", `${siteCreds.length} credentials saved for ${currentDomain}`);
   }
 
   renderList();
@@ -189,21 +259,35 @@ function getSiteCreds() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach((b) => {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
     btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
     activeTab = btn.dataset.tab;
     renderList();
+  });
+
+  // Keyboard: arrow keys to switch tabs
+  btn.addEventListener("keydown", (e) => {
+    const tabs = [...document.querySelectorAll(".tab-btn")];
+    const idx  = tabs.indexOf(btn);
+    if (e.key === "ArrowRight" && idx < tabs.length - 1) { e.preventDefault(); tabs[idx + 1].focus(); tabs[idx + 1].click(); }
+    if (e.key === "ArrowLeft"  && idx > 0)               { e.preventDefault(); tabs[idx - 1].focus(); tabs[idx - 1].click(); }
   });
 });
 
 // ── Search ────────────────────────────────────────────────────────────────────
 searchInput.addEventListener("input", () => {
   searchClear.classList.toggle("hidden", !searchInput.value);
+  searchClear.setAttribute("aria-hidden", !searchInput.value ? "true" : "false");
   renderList();
 });
 searchClear.addEventListener("click", () => {
   searchInput.value = "";
   searchClear.classList.add("hidden");
+  searchClear.setAttribute("aria-hidden", "true");
   renderList();
   searchInput.focus();
 });
@@ -223,64 +307,83 @@ function renderList() {
 
   if (creds.length === 0) {
     emptyState.classList.remove("hidden");
-    emptyState.querySelector(".empty-sub").textContent =
-      q ? "Try a different search term" :
-      activeTab === "site" ? `No credentials saved for ${currentDomain}` :
-      "Click Save when you log into a website";
+    const sub = q ? t("emptySubSearch")
+      : activeTab === "site" ? t("emptySubSite")
+      : t("emptySubDefault");
+    emptyState.querySelector(".empty-sub").textContent = sub;
     return;
   }
 
   emptyState.classList.add("hidden");
-  creds.forEach((c) => credList.appendChild(buildCard(c)));
+  creds.forEach((c, i) => {
+    const li = document.createElement("li");
+    li.setAttribute("role", "listitem");
+    li.appendChild(buildCard(c));
+    credList.appendChild(li);
+  });
 }
 
 // ── Credential card ───────────────────────────────────────────────────────────
 function buildCard(cred) {
   const card = document.createElement("div");
   card.className = "cred-card";
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `${cred.website}, ${cred.username}. Press Enter to view details.`);
 
   const faviconUrl = getFavicon(cred.website);
   const letter = escHtml((cred.website || "?").charAt(0).toUpperCase());
 
   card.innerHTML = `
-    <img class="cred-favicon" src="${faviconUrl}" alt=""
+    <img class="cred-favicon" src="${faviconUrl}" alt="${escHtml(cred.website)} logo"
       onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-    <div class="cred-favicon-fb" style="display:none;">${letter}</div>
+    <div class="cred-favicon-fb" style="display:none;" aria-hidden="true">${letter}</div>
     <div class="cred-info">
       <div class="cred-site">${escHtml(cred.website)}</div>
       <div class="cred-user">${escHtml(cred.username)}</div>
     </div>
-    <div class="cred-quick">
-      <button class="q-btn btn-copy-u" title="Copy username">👤</button>
-      <button class="q-btn btn-copy-p" title="Copy password">🔑</button>
-      <button class="q-btn danger btn-delete" title="Delete">🗑</button>
+    <div class="cred-quick" role="group" aria-label="Quick actions for ${escHtml(cred.website)}">
+      <button class="q-btn btn-copy-u" aria-label="${t("copyUsername")} for ${escHtml(cred.website)}">👤</button>
+      <button class="q-btn btn-copy-p" aria-label="${t("copyPassword")} for ${escHtml(cred.website)}">🔑</button>
+      <button class="q-btn danger btn-delete" aria-label="${t("deleteCredential")} for ${escHtml(cred.website)}">🗑</button>
     </div>`;
 
-  // Open detail on card click (not on action buttons)
+  // Click or Enter/Space to open detail
   card.addEventListener("click", (e) => {
     if (e.target.closest(".cred-quick")) return;
     openDetail(cred);
   });
+  card.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && !e.target.closest(".cred-quick")) {
+      e.preventDefault();
+      openDetail(cred);
+    }
+  });
 
   card.querySelector(".btn-copy-u").onclick = (e) => {
     e.stopPropagation();
-    copyToClipboard(cred.username, "Username copied!");
+    copyToClipboard(cred.username, t("usernameCopied"));
   };
   card.querySelector(".btn-copy-p").onclick = (e) => {
     e.stopPropagation();
-    copyToClipboard(cred.password, "Password copied!");
+    copyToClipboard(cred.password, t("passwordCopied"));
   };
   card.querySelector(".btn-delete").onclick = (e) => {
     e.stopPropagation();
-    deleteCredential(cred._id, card);
+    deleteCredential(cred._id, card.closest("li") || card);
   };
 
   return card;
 }
 
-// ── Detail panel ──────────────────────────────────────────────────────────────
+// ── Detail panel — with focus trap ───────────────────────────────────────────
+let _lastFocusBeforeDetail = null;
+
 function openDetail(cred) {
+  _lastFocusBeforeDetail = document.activeElement;
+
   detailTitle.textContent = cred.website;
+  detailPanel.setAttribute("aria-label", t("credentialDetails", cred.website));
   detailPanel.classList.remove("hidden");
 
   const faviconUrl = getFavicon(cred.website);
@@ -289,11 +392,11 @@ function openDetail(cred) {
   detailBody.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
       <img src="${faviconUrl}" width="36" height="36" style="border-radius:8px;object-fit:contain;"
+        alt="${escHtml(cred.website)} logo"
         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
       <div style="display:none;width:36px;height:36px;border-radius:8px;background:#312e81;
-        color:#a5b4fc;font-size:16px;font-weight:700;align-items:center;justify-content:center;">
-        ${letter}
-      </div>
+        color:#a5b4fc;font-size:16px;font-weight:700;align-items:center;justify-content:center;"
+        aria-hidden="true">${letter}</div>
       <div>
         <div style="font-size:15px;font-weight:700;color:#e0e7ff;">${escHtml(cred.website)}</div>
         <div style="font-size:11px;color:#4b5563;margin-top:2px;">${escHtml(cred.category || "Others")}</div>
@@ -301,68 +404,112 @@ function openDetail(cred) {
     </div>
 
     <div class="detail-field">
-      <div class="detail-label">Username / Email</div>
-      <div class="detail-value-row">
-        <span class="detail-value">${escHtml(cred.username)}</span>
-        <button class="copy-btn" data-copy="${escHtml(cred.username)}" title="Copy">📋</button>
+      <div class="detail-label" id="lbl-user">${t("detailUsernameLabel")}</div>
+      <div class="detail-value-row" role="group" aria-labelledby="lbl-user">
+        <span class="detail-value" aria-label="Username: ${escHtml(cred.username)}">${escHtml(cred.username)}</span>
+        <button class="copy-btn" data-copy="${escHtml(cred.username)}" aria-label="${t("copyUsername")}">📋</button>
       </div>
     </div>
 
     <div class="detail-field">
-      <div class="detail-label">Password</div>
-      <div class="detail-value-row">
-        <span class="detail-value" id="pwd-val" style="filter:blur(4px);transition:filter .2s;">
-          ${escHtml(cred.password)}
-        </span>
-        <button class="copy-btn" id="toggle-pwd" title="Show/Hide">👁</button>
-        <button class="copy-btn" data-copy="${escHtml(cred.password)}" title="Copy">📋</button>
+      <div class="detail-label" id="lbl-pwd">${t("detailPasswordLabel")}</div>
+      <div class="detail-value-row" role="group" aria-labelledby="lbl-pwd">
+        <span class="detail-value" id="pwd-val" style="filter:blur(4px);transition:filter .2s;"
+          aria-label="Password hidden">••••••••</span>
+        <button class="copy-btn" id="toggle-pwd" aria-label="${t("showPassword")}" aria-pressed="false">👁</button>
+        <button class="copy-btn" data-copy="${escHtml(cred.password)}" aria-label="${t("copyPassword")}">📋</button>
       </div>
     </div>
 
+    ${cred.notes ? `
+    <div class="detail-field">
+      <div class="detail-label">Notes</div>
+      <div style="background:#1e1b4b;border:1px solid #312e81;border-radius:8px;padding:8px 10px;">
+        <p style="color:#c7d2fe;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;margin:0;">${escHtml(cred.notes)}</p>
+      </div>
+    </div>` : ""}
+
     <div class="detail-actions">
-      <button class="btn-fill-detail" id="detail-fill">⚡ Autofill on page</button>
-      <button class="btn-delete-detail" id="detail-delete">🗑 Delete</button>
+      <button class="btn-fill-detail" id="detail-fill" aria-label="${t("autofill")} for ${escHtml(cred.website)}">⚡ ${t("autofill")}</button>
+      <button class="btn-delete-detail" id="detail-delete" aria-label="${t("deleteCredential")} for ${escHtml(cred.website)}">🗑 ${t("delete")}</button>
     </div>`;
 
   // Toggle password visibility
   let pwdVisible = false;
-  document.getElementById("toggle-pwd").onclick = () => {
+  const pwdVal   = document.getElementById("pwd-val");
+  const toggleBtn = document.getElementById("toggle-pwd");
+  toggleBtn.onclick = () => {
     pwdVisible = !pwdVisible;
-    document.getElementById("pwd-val").style.filter = pwdVisible ? "none" : "blur(4px)";
-    document.getElementById("toggle-pwd").textContent = pwdVisible ? "🙈" : "👁";
+    pwdVal.style.filter = pwdVisible ? "none" : "blur(4px)";
+    pwdVal.textContent  = pwdVisible ? cred.password : "••••••••";
+    pwdVal.setAttribute("aria-label", pwdVisible ? `Password: ${cred.password}` : "Password hidden");
+    toggleBtn.textContent = pwdVisible ? "🙈" : "👁";
+    toggleBtn.setAttribute("aria-label", pwdVisible ? t("hidePassword") : t("showPassword"));
+    toggleBtn.setAttribute("aria-pressed", String(pwdVisible));
   };
 
-  // Copy buttons
   detailBody.querySelectorAll(".copy-btn[data-copy]").forEach((btn) => {
-    btn.onclick = () => copyToClipboard(btn.dataset.copy, "Copied!");
+    btn.onclick = () => copyToClipboard(btn.dataset.copy, t("copied"));
   });
 
-  // Autofill
   document.getElementById("detail-fill").onclick = () => autofillInTab(cred);
-
-  // Delete
   document.getElementById("detail-delete").onclick = () => {
-    deleteCredential(cred._id, null, () => {
-      detailPanel.classList.add("hidden");
-    });
+    deleteCredential(cred._id, null, () => closeDetail());
   };
+
+  // Focus the back button when panel opens
+  setTimeout(() => detailBack.focus(), 50);
+
+  // Trap focus inside detail panel
+  detailPanel.addEventListener("keydown", trapFocus);
 }
 
-detailBack.addEventListener("click", () => detailPanel.classList.add("hidden"));
+function closeDetail() {
+  detailPanel.classList.add("hidden");
+  detailPanel.removeEventListener("keydown", trapFocus);
+  // Return focus to where it was before opening
+  if (_lastFocusBeforeDetail) _lastFocusBeforeDetail.focus();
+}
+
+detailBack.addEventListener("click", closeDetail);
+
+// Close detail on Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !detailPanel.classList.contains("hidden")) {
+    closeDetail();
+  }
+});
+
+// Focus trap helper — keeps Tab/Shift+Tab inside the detail panel
+function trapFocus(e) {
+  if (e.key !== "Tab") return;
+  const focusable = [...detailPanel.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )].filter((el) => !el.disabled && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault(); first.focus();
+  }
+}
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 async function deleteCredential(id, cardEl, onSuccess) {
-  if (!confirm("Delete this credential?")) return;
+  if (!confirm(t("confirmDelete"))) return;
   const res = await sendMsg({ type: "DELETE_CREDENTIAL", id });
   if (res?.ok) {
     allCredentials = allCredentials.filter((c) => c._id !== id);
     credCount.textContent = allCredentials.length;
+    credCount.setAttribute("aria-label", `${allCredentials.length} credentials stored`);
     if (cardEl) cardEl.remove();
     renderList();
     if (onSuccess) onSuccess();
-    showToast("Deleted!");
+    showToast(t("deleted"));
   } else {
-    showToast("Failed to delete.");
+    showToast(t("deleteFailed"));
   }
 }
 
@@ -394,7 +541,9 @@ async function autofillInTab(cred) {
     },
     args: [cred.username, cred.password],
   });
-  showToast(`✅ Filled: ${cred.username}`);
+  showToast(`✅ ${t("autofillSuccess", cred.username)}`);
+  // Track autofill usage for analytics
+  if (cred._id) sendMsg({ type: "MARK_USED", id: cred._id });
   window.close();
 }
 
@@ -404,16 +553,19 @@ function copyToClipboard(text, msg) {
 }
 
 function showToast(msg) {
-  let t = document.getElementById("kv-popup-toast");
-  if (!t) {
-    t = document.createElement("div");
-    t.id = "kv-popup-toast";
-    document.body.appendChild(t);
+  let toast = document.getElementById("kv-popup-toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "kv-popup-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.setAttribute("aria-atomic", "true");
+    document.body.appendChild(toast);
   }
-  t.textContent = msg;
-  t.style.opacity = "1";
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.style.opacity = "0"; }, 2000);
+  toast.textContent = msg;
+  toast.style.opacity = "1";
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = "0"; }, 2000);
 }
 
 function showError(el, msg) { el.textContent = msg; el.classList.remove("hidden"); }
@@ -427,3 +579,64 @@ function sendMsg(msg) {
     catch (e) { resolve({ ok: false, error: e.message }); }
   });
 }
+
+// ── Keyboard navigation for credential list (↑ ↓ Enter) ──────────────────────
+// Allows users to navigate cards without a mouse.
+// ↑ / ↓  — move focus between cards
+// Enter   — open detail panel for focused card
+// /       — jump focus to search input from anywhere in the list
+
+document.addEventListener("keydown", (e) => {
+  // Skip if detail panel is open, or focus is inside an input/button already
+  if (!detailPanel.classList.contains("hidden")) return;
+  if (mainScreen.classList.contains("hidden")) return;
+
+  const cards = [...credList.querySelectorAll(".cred-card")];
+  if (!cards.length) return;
+
+  const focused = document.activeElement;
+  const currentIdx = cards.indexOf(focused);
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (currentIdx === -1) {
+      // Nothing focused yet — focus first card
+      cards[0].focus();
+    } else if (currentIdx < cards.length - 1) {
+      cards[currentIdx + 1].focus();
+    }
+    return;
+  }
+
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (currentIdx > 0) {
+      cards[currentIdx - 1].focus();
+    } else if (currentIdx === 0) {
+      // At top — move focus back to search input
+      searchInput.focus();
+    }
+    return;
+  }
+
+  // "/" — jump to search from anywhere in the list
+  if (e.key === "/" && cards.includes(focused)) {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+    return;
+  }
+});
+
+// After renderList, restore focus to the previously focused card index
+// so navigation position is preserved after search/filter updates
+const _origRenderList = renderList;
+(function patchRenderList() {
+  const origRender = window.renderList || renderList;
+  // Store last focused card index before re-render
+  credList.addEventListener("focusin", () => {
+    const cards = [...credList.querySelectorAll(".cred-card")];
+    const idx = cards.indexOf(document.activeElement);
+    if (idx !== -1) credList._lastFocusedIdx = idx;
+  });
+})();

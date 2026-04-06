@@ -6,71 +6,138 @@
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <!-- Lock screen -->
-  <div id="lock-screen" class="screen">
-    <div class="brand">
+  <!-- ── Lock screen ── -->
+   <!-- ── Offline screen ── -->
+<div id="offline-screen" class="screen hidden" role="alert" aria-live="assertive">
+  <div class="offline-icon">⚡</div>
+  <div class="offline-title">Backend Offline</div>
+  <div class="offline-sub">
+    KeyVault can't reach the backend server.<br>
+    Make sure your local server is running.
+  </div>
+  <ul class="offline-steps">
+    <li>Open your terminal</li>
+    <li>Run: <strong>node backend</strong> (or npm start)</li>
+    <li>Server should start on port 5000</li>
+    <li>Then click Retry below</li>
+  </ul>
+  <button class="btn-retry" id="retry-btn">↺ Retry Connection</button>
+  <p class="offline-note">Checking http://localhost:5000</p>
+</div>
+  <main id="lock-screen" class="screen" role="main" aria-label="Unlock KeyVault">
+    <div class="brand" aria-hidden="true">
       <div class="brand-icon">🔑</div>
       <div class="brand-name">KeyVault</div>
       <div class="brand-sub">Your encrypted password vault</div>
     </div>
-    <input id="master-input" type="password" placeholder="Enter master password" autocomplete="current-password" />
-    <button id="unlock-btn" class="btn-primary">Unlock Vault</button>
-    <p id="lock-error" class="error hidden"></p>
-  </div>
 
-  <!-- Main vault screen -->
-  <div id="main-screen" class="screen hidden">
+    <label for="master-input" class="sr-only">Master password</label>
+    <input
+      id="master-input"
+      type="password"
+      placeholder="Enter master password"
+      autocomplete="current-password"
+      aria-required="true"
+      aria-describedby="lock-error"
+    />
+
+    <button id="unlock-btn" class="btn-primary" aria-label="Unlock Vault">
+      Unlock Vault
+    </button>
+
+    <p id="lock-error" class="error hidden" role="alert" aria-live="assertive"></p>
+  </main>
+
+  <!-- ── Main vault screen ── -->
+  <main id="main-screen" class="screen hidden" role="main" aria-label="KeyVault password vault">
 
     <!-- Header -->
-    <div class="vault-header">
-      <div class="vault-title">🔑 KeyVault</div>
+    <div class="vault-header" role="banner">
+      <div class="vault-title" aria-hidden="true">🔑 KeyVault</div>
       <div class="header-actions">
-        <span id="cred-count" class="count-badge">0</span>
-        <button id="lock-btn" class="icon-btn" title="Lock vault">🔒</button>
+        <span
+          id="cred-count"
+          class="count-badge"
+          aria-label="0 credentials stored"
+          aria-live="polite"
+        >0</span>
+        <button id="lock-btn" class="icon-btn" aria-label="Lock vault">🔒</button>
       </div>
     </div>
 
     <!-- This site banner -->
-    <div id="this-site-bar" class="site-bar hidden">
+    <div
+      id="this-site-bar"
+      class="site-bar hidden"
+      role="status"
+      aria-live="polite"
+      aria-label="Credentials for current site"
+    >
       <span id="site-bar-domain" class="site-bar-domain"></span>
       <span class="site-bar-label">credentials saved</span>
     </div>
 
     <!-- Search -->
-    <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input id="search-input" type="text" placeholder="Search credentials…" class="search" />
-      <button id="search-clear" class="search-clear hidden">✕</button>
+    <div class="search-wrap" role="search">
+      <span class="search-icon" aria-hidden="true">🔍</span>
+      <label for="search-input" class="sr-only">Search credentials</label>
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Search credentials…"
+        class="search"
+        aria-label="Search credentials"
+        aria-controls="cred-list"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button
+        id="search-clear"
+        class="search-clear hidden"
+        aria-label="Clear search"
+      >✕</button>
     </div>
 
     <!-- Tab bar -->
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="all">All</button>
-      <button class="tab-btn" data-tab="site">This Site</button>
+    <div class="tab-bar" role="tablist" aria-label="Filter credentials">
+      <button class="tab-btn active" data-tab="all" role="tab" aria-selected="true" aria-controls="cred-list">All</button>
+      <button class="tab-btn" data-tab="site" role="tab" aria-selected="false" aria-controls="cred-list">This Site</button>
     </div>
 
     <!-- Credential list -->
-    <div id="cred-list" class="cred-list"></div>
+    <ul
+      id="cred-list"
+      class="cred-list"
+      role="list"
+      aria-label="Saved credentials"
+      aria-live="polite"
+    ></ul>
 
     <!-- Empty state -->
-    <div id="empty-state" class="empty-state hidden">
-      <div class="empty-icon">🗝️</div>
+    <div id="empty-state" class="empty-state hidden" role="status" aria-live="polite">
+      <div class="empty-icon" aria-hidden="true">🗝️</div>
       <div class="empty-title">No credentials found</div>
       <div class="empty-sub">Try a different search term</div>
     </div>
 
     <!-- Error -->
-    <p id="main-error" class="error hidden"></p>
-  </div>
+    <p id="main-error" class="error hidden" role="alert" aria-live="assertive"></p>
+  </main>
 
-  <!-- Detail / edit panel (slides in) -->
-  <div id="detail-panel" class="detail-panel hidden">
+  <!-- ── Detail panel ── -->
+  <section
+    id="detail-panel"
+    class="detail-panel hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="detail-title"
+  >
     <div class="detail-header">
-      <button id="detail-back" class="back-btn">← Back</button>
-      <div id="detail-title" class="detail-title"></div>
+      <button id="detail-back" class="back-btn" aria-label="Back to list">← Back</button>
+      <h2 id="detail-title" class="detail-title"></h2>
     </div>
     <div id="detail-body" class="detail-body"></div>
-  </div>
+  </section>
 
   <script src="popup.js"></script>
 </body>

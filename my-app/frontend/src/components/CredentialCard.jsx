@@ -1,34 +1,26 @@
 import { useState } from "react";
 import { getCategoryColor } from "../utils/categories";
 
-// Formats date nicely
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short", day: "numeric", year: "numeric",
   });
 }
 
-// Returns age info for a password
 function getPasswordAge(createdAt) {
   const days = Math.floor((Date.now() - new Date(createdAt)) / (1000 * 60 * 60 * 24));
   let label, color, urgent;
-  if (days < 30) {
-    label = `${days}d old`; color = "text-green-500 dark:text-green-400"; urgent = false;
-  } else if (days < 60) {
-    label = `${days}d old`; color = "text-yellow-500 dark:text-yellow-400"; urgent = false;
-  } else if (days < 90) {
-    label = `${days}d old`; color = "text-orange-500 dark:text-orange-400"; urgent = false;
-  } else {
+  if (days < 30)       { label = `${days}d old`;  color = "text-green-500 dark:text-green-400";  urgent = false; }
+  else if (days < 60)  { label = `${days}d old`;  color = "text-yellow-500 dark:text-yellow-400"; urgent = false; }
+  else if (days < 90)  { label = `${days}d old`;  color = "text-orange-500 dark:text-orange-400"; urgent = false; }
+  else {
     const months = Math.floor(days / 30);
-    label = months >= 12
-      ? `${Math.floor(months / 12)}y ${months % 12}m old`
-      : `${months}mo old`;
+    label = months >= 12 ? `${Math.floor(months / 12)}y ${months % 12}m old` : `${months}mo old`;
     color = "text-red-500 dark:text-red-400"; urgent = true;
   }
   return { days, label, color, urgent };
 }
 
-// Copy text to clipboard and show brief feedback
 function useCopy() {
   const [copied, setCopied] = useState(null);
   const copy = async (text, key) => {
@@ -39,69 +31,29 @@ function useCopy() {
   return { copied, copy };
 }
 
-// Map of common app/bank names to their actual domains
 const DOMAIN_MAP = {
-  canara: "canarabank.com",
-  "canara bank": "canarabank.com",
-  sbi: "sbi.co.in",
-  hdfc: "hdfcbank.com",
-  icici: "icicibank.com",
-  axis: "axisbank.com",
-  kotak: "kotak.com",
-  bookmyshow: "bookmyshow.com",
-  "book my show": "bookmyshow.com",
-  google: "google.com",
-  gmail: "gmail.com",
-  whatsapp: "whatsapp.com",
-  instagram: "instagram.com",
-  facebook: "facebook.com",
-  twitter: "twitter.com",
-  x: "x.com",
-  youtube: "youtube.com",
-  netflix: "netflix.com",
-  amazon: "amazon.com",
-  flipkart: "flipkart.com",
-  swiggy: "swiggy.com",
-  zomato: "zomato.com",
-  paytm: "paytm.com",
-  phonepe: "phonepe.com",
-  gpay: "pay.google.com",
-  "google pay": "pay.google.com",
-  linkedin: "linkedin.com",
-  github: "github.com",
-  spotify: "spotify.com",
-  hotstar: "hotstar.com",
-  "disney+": "hotstar.com",
-  jio: "jio.com",
-  airtel: "airtel.in",
-  bsnl: "bsnl.co.in",
-  uber: "uber.com",
-  ola: "olacabs.com",
-  irctc: "irctc.co.in",
-  makemytrip: "makemytrip.com",
-  reddit: "reddit.com",
-  snapchat: "snapchat.com",
-  telegram: "telegram.org",
-  zoom: "zoom.us",
-  microsoft: "microsoft.com",
-  outlook: "outlook.com",
-  yahoo: "yahoo.com",
-  apple: "apple.com",
-  dropbox: "dropbox.com",
-  notion: "notion.so",
-  slack: "slack.com",
+  canara:"canarabank.com","canara bank":"canarabank.com",sbi:"sbi.co.in",
+  hdfc:"hdfcbank.com",icici:"icicibank.com",axis:"axisbank.com",kotak:"kotak.com",
+  bookmyshow:"bookmyshow.com","book my show":"bookmyshow.com",
+  google:"google.com",gmail:"gmail.com",whatsapp:"whatsapp.com",
+  instagram:"instagram.com",facebook:"facebook.com",twitter:"twitter.com",
+  x:"x.com",youtube:"youtube.com",netflix:"netflix.com",amazon:"amazon.com",
+  flipkart:"flipkart.com",swiggy:"swiggy.com",zomato:"zomato.com",
+  paytm:"paytm.com",phonepe:"phonepe.com",gpay:"pay.google.com",
+  "google pay":"pay.google.com",linkedin:"linkedin.com",github:"github.com",
+  spotify:"spotify.com",hotstar:"hotstar.com","disney+":"hotstar.com",
+  jio:"jio.com",airtel:"airtel.in",bsnl:"bsnl.co.in",uber:"uber.com",
+  ola:"olacabs.com",irctc:"irctc.co.in",makemytrip:"makemytrip.com",
+  reddit:"reddit.com",snapchat:"snapchat.com",telegram:"telegram.org",
+  zoom:"zoom.us",microsoft:"microsoft.com",outlook:"outlook.com",
+  yahoo:"yahoo.com",apple:"apple.com",dropbox:"dropbox.com",
+  notion:"notion.so",slack:"slack.com",
 };
 
 function getFaviconUrl(site) {
   if (!site) return "";
   const lower = site.trim().toLowerCase();
-
-  // Check name map first
-  if (DOMAIN_MAP[lower]) {
-    return `https://www.google.com/s2/favicons?domain=${DOMAIN_MAP[lower]}&sz=64`;
-  }
-
-  // If it looks like a domain or URL, use it directly
+  if (DOMAIN_MAP[lower]) return `https://www.google.com/s2/favicons?domain=${DOMAIN_MAP[lower]}&sz=64`;
   try {
     if (site.includes(".")) {
       const url = site.startsWith("http") ? site : "https://" + site;
@@ -109,46 +61,73 @@ function getFaviconUrl(site) {
       return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
     }
   } catch {}
-
-  // Last resort — try the raw string as a domain guess
   return `https://www.google.com/s2/favicons?domain=${lower}.com&sz=64`;
 }
 
 function SiteIcon({ website }) {
   const [failed, setFailed] = useState(false);
-
   if (!failed) {
     return (
       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gray-100 dark:bg-gray-800 overflow-hidden">
-        <img
-          src={getFaviconUrl(website)}
-          alt={website}
-          className="w-6 h-6 object-contain"
-          onError={() => setFailed(true)}
-        />
+        <img src={getFaviconUrl(website)} alt={website}
+          className="w-6 h-6 object-contain" onError={() => setFailed(true)} />
       </div>
     );
   }
-
   return (
     <div className="w-10 h-10 bg-indigo-900/50 rounded-xl flex items-center justify-center flex-shrink-0">
-      <span className="text-indigo-300 font-bold text-sm uppercase">
-        {website?.charAt(0) || "?"}
-      </span>
+      <span className="text-indigo-300 font-bold text-sm uppercase">{website?.charAt(0) || "?"}</span>
     </div>
   );
 }
 
-export default function CredentialCard({ credential, onDelete, onEdit, isReused = false }) {
+export default function CredentialCard({
+  credential, onDelete, onEdit, isReused = false,
+  // Bulk selection props
+  bulkMode = false, isSelected = false, onToggleSelect,
+}) {
   const [showPassword, setShowPassword] = useState(false);
   const { copied, copy } = useCopy();
   const color = getCategoryColor(credential.category);
-  const age = getPasswordAge(credential.createdAt);
+  const age   = getPasswordAge(credential.createdAt);
+
+  function handleCardClick(e) {
+    // In bulk mode, clicking anywhere on the card toggles selection
+    if (bulkMode) {
+      e.preventDefault();
+      onToggleSelect?.(credential._id);
+    }
+  }
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 hover:border-gray-300 dark:hover:border-gray-700 transition-all duration-200 group">
+    <div
+      onClick={handleCardClick}
+      className={`relative bg-white dark:bg-gray-900 border rounded-2xl p-5 transition-all duration-200 group
+        ${bulkMode ? "cursor-pointer select-none" : ""}
+        ${isSelected
+          ? "border-indigo-500 ring-2 ring-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-900/10"
+          : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+        }`}
+    >
+      {/* ── Bulk checkbox ── */}
+      {bulkMode && (
+        <div className="absolute top-3 left-3 z-10">
+          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
+            ${isSelected
+              ? "bg-indigo-600 border-indigo-600"
+              : "bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
+            }`}>
+            {isSelected && (
+              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Card header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className={`flex items-start justify-between mb-3 ${bulkMode ? "pl-7" : ""}`}>
         <div className="flex items-center gap-3">
           <SiteIcon website={credential.website} />
           <div>
@@ -159,83 +138,100 @@ export default function CredentialCard({ credential, onDelete, onEdit, isReused 
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(credential)}
-            className="p-1.5 text-gray-400 hover:text-indigo-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Edit">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
-          <button onClick={() => onDelete(credential._id)}
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Delete">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        </div>
+
+        {/* Edit / Delete — hidden in bulk mode */}
+        {!bulkMode && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => onEdit(credential)}
+              className="p-1.5 text-gray-400 hover:text-indigo-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Edit">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button onClick={() => onDelete(credential._id)}
+              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Delete">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 90+ day warning */}
       {age.urgent && (
-        <div className="mb-3 flex items-center gap-2 bg-red-50 dark:bg-red-900/20
-          border border-red-200 dark:border-red-800/50 rounded-lg px-3 py-2">
+        <div className={`mb-3 flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg px-3 py-2 ${bulkMode ? "ml-7" : ""}`}>
           <span className="text-sm">🔄</span>
           <div className="flex-1">
-            <p className="text-red-600 dark:text-red-400 text-xs font-medium">
-              Password is {age.days} days old — time to update!
-            </p>
-            <p className="text-red-400 dark:text-red-500 text-xs opacity-75">
-              Passwords older than 90 days are a security risk.
-            </p>
+            <p className="text-red-600 dark:text-red-400 text-xs font-medium">Password is {age.days} days old — time to update!</p>
+            <p className="text-red-400 dark:text-red-500 text-xs opacity-75">Passwords older than 90 days are a security risk.</p>
           </div>
-          <button onClick={() => onEdit(credential)}
-            className="text-xs bg-red-500 hover:bg-red-600 text-white px-2.5 py-1
-              rounded-md font-medium transition-colors flex-shrink-0">
-            Update
-          </button>
+          {!bulkMode && (
+            <button onClick={() => onEdit(credential)}
+              className="text-xs bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded-md font-medium transition-colors flex-shrink-0">
+              Update
+            </button>
+          )}
         </div>
       )}
 
       {/* Category badge + reuse warning */}
-      <div className="mb-3 flex items-center gap-2 flex-wrap">
+      <div className={`mb-3 flex items-center gap-2 flex-wrap ${bulkMode ? "ml-7" : ""}`}>
         <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${color.bg} ${color.text} ${color.border}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${color.dot}`} />
           {credential.category || "Others"}
         </span>
         {isReused && (
-          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border
-            bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400
-            border-amber-200 dark:border-amber-800/50" title="This password is reused across multiple sites">
+          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/50">
             ⚠️ Reused password
           </span>
         )}
       </div>
 
-      {/* Username row */}
-      <div className="flex items-center gap-2 mb-2">
-        <input readOnly value={credential.username}
-          className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 text-sm focus:outline-none" />
-        <button onClick={() => copy(credential.username, "user")}
-          className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
-          {copied === "user" ? <><CheckIcon /><span className="text-xs text-green-500">Copied!</span></> : <CopyIcon />}
-        </button>
-      </div>
+      {/* Username row — hidden in bulk mode to keep cards compact */}
+      {!bulkMode && (
+        <div className="flex items-center gap-2 mb-2">
+          <input readOnly value={credential.username}
+            className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 text-sm focus:outline-none" />
+          <button onClick={() => copy(credential.username, "user")}
+            className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
+            {copied === "user" ? <><CheckIcon /><span className="text-xs text-green-500">Copied!</span></> : <CopyIcon />}
+          </button>
+        </div>
+      )}
 
-      {/* Password row */}
-      <div className="flex items-center gap-2">
-        <input readOnly type={showPassword ? "text" : "password"} value={credential.password}
-          className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 text-sm focus:outline-none" />
-        <button onClick={() => setShowPassword(!showPassword)}
-          className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
-          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
-        <button onClick={() => copy(credential.password, "pwd")}
-          className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
-          {copied === "pwd" ? <><CheckIcon /><span className="text-xs text-green-500">Copied!</span></> : <CopyIcon />}
-        </button>
-      </div>
+      {/* Password row — hidden in bulk mode */}
+      {!bulkMode && (
+        <div className="flex items-center gap-2">
+          <input readOnly type={showPassword ? "text" : "password"} value={credential.password}
+            className="flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300 text-sm focus:outline-none" />
+          <button onClick={() => setShowPassword(!showPassword)}
+            className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
+            {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
+          <button onClick={() => copy(credential.password, "pwd")}
+            className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
+            {copied === "pwd" ? <><CheckIcon /><span className="text-xs text-green-500">Copied!</span></> : <CopyIcon />}
+          </button>
+        </div>
+      )}
+
+      {/* In bulk mode show username compactly */}
+      {bulkMode && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 ml-7 truncate">{credential.username}</p>
+      )}
+
+      {/* Notes — shown in both modes if present */}
+      {credential.notes && (
+        <div className={`mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 ${bulkMode ? "ml-7" : ""}`}>
+          <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Notes</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words leading-relaxed">
+            {credential.notes}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -258,8 +254,7 @@ function CheckIcon() {
 function EyeIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
     </svg>

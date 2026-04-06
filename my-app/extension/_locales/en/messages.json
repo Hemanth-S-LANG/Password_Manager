@@ -1,0 +1,50 @@
+{
+  "appName":               { "message": "KeyVault", "description": "App name" },
+  "appDesc":               { "message": "Your encrypted password vault" },
+
+  "unlockVault":           { "message": "Unlock Vault" },
+  "verifying":             { "message": "Verifying…" },
+  "masterPasswordLabel":   { "message": "Master password" },
+  "masterPasswordPh":      { "message": "Enter master password" },
+  "lockVault":             { "message": "Lock vault" },
+
+  "errNoServer":           { "message": "Cannot reach backend. Is the server running?" },
+  "errNoPassword":         { "message": "No master password set. Open the dashboard first." },
+  "errIncorrect":          { "message": "Incorrect master password." },
+  "errAttemptsLeft":       { "message": "Incorrect password. $COUNT$ attempt(s) remaining before lockout.", "placeholders": { "count": { "content": "$1" } } },
+  "errLockout":            { "message": "🔒 Too many failed attempts. Try again in $TIME$.", "placeholders": { "time": { "content": "$1" } } },
+  "msgTryAgain":           { "message": "You may try again now." },
+
+  "searchPh":              { "message": "Search credentials…" },
+  "searchClear":           { "message": "Clear search" },
+  "tabAll":                { "message": "All" },
+  "tabSite":               { "message": "This Site" },
+  "credCount":             { "message": "$COUNT$ credential(s)", "placeholders": { "count": { "content": "$1" } } },
+
+  "emptyTitle":            { "message": "No credentials found" },
+  "emptySubSearch":        { "message": "Try a different search term" },
+  "emptySubSite":          { "message": "No credentials saved for this site" },
+  "emptySubDefault":       { "message": "Click Save when you log into a website" },
+
+  "copyUsername":          { "message": "Copy username" },
+  "copyPassword":          { "message": "Copy password" },
+  "deleteCredential":      { "message": "Delete credential" },
+  "usernameCopied":        { "message": "Username copied!" },
+  "passwordCopied":        { "message": "Password copied!" },
+  "copied":                { "message": "Copied!" },
+  "deleted":               { "message": "Deleted!" },
+  "deleteFailed":          { "message": "Failed to delete." },
+  "confirmDelete":         { "message": "Delete this credential?" },
+
+  "detailBack":            { "message": "Back to list" },
+  "detailUsernameLabel":   { "message": "Username / Email" },
+  "detailPasswordLabel":   { "message": "Password" },
+  "showPassword":          { "message": "Show password" },
+  "hidePassword":          { "message": "Hide password" },
+  "autofill":              { "message": "Autofill on page" },
+  "autofillSuccess":       { "message": "Filled: $USER$", "placeholders": { "user": { "content": "$1" } } },
+  "delete":                { "message": "Delete" },
+
+  "credentialDetails":     { "message": "Credential details for $SITE$", "placeholders": { "site": { "content": "$1" } } },
+  "loadFailed":            { "message": "Failed to load credentials." }
+}

@@ -175,6 +175,8 @@
         setNativeValue(pair.userField, c.username);
         setNativeValue(pair.pwField,   c.password);
         showToast("✅ Credentials filled!");
+        // Track autofill usage for analytics
+        if (c._id) safeSendMessage({ type: "MARK_USED", id: c._id });
       } else {
         // Multiple credentials — show picker
         autofillDone = false;
@@ -767,6 +769,8 @@
         autofillDone = true;
         banner.remove();
         showToast(`✅ Filled: ${c.username}`);
+        // Track autofill usage for analytics
+        if (c._id) safeSendMessage({ type: "MARK_USED", id: c._id });
       };
 
       list.appendChild(row);

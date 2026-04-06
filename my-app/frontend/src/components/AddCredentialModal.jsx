@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { CATEGORIES } from "../utils/categories";
 
 export default function AddCredentialModal({ onClose, onSave, editData }) {
-  const [form, setForm] = useState({ website: "", username: "", password: "", category: "Others" });
+  const [form, setForm] = useState({ website: "", username: "", password: "", category: "Others", notes: "" });
   const [showPwd, setShowPwd] = useState(false);
   const [customCategory, setCustomCategory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -13,10 +13,11 @@ export default function AddCredentialModal({ onClose, onSave, editData }) {
     if (editData) {
       const isCustom = !CATEGORIES.includes(editData.category);
       setForm({
-        website: editData.website,
+        website:  editData.website,
         username: editData.username,
         password: editData.password,
         category: isCustom ? "custom" : editData.category,
+        notes:    editData.notes || "",
       });
       if (isCustom) setCustomCategory(editData.category);
     }
@@ -106,6 +107,21 @@ export default function AddCredentialModal({ onClose, onSave, editData }) {
                 placeholder="Enter custom category name"
                 className="mt-2 w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors" />
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+              Notes <span className="text-gray-400 dark:text-gray-600 font-normal">(optional)</span>
+            </label>
+            <textarea
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Security questions, recovery codes, PINs, hints..."
+              rows={3}
+              className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">Stored as plain text — do not save highly sensitive info here.</p>
           </div>
 
           {error && <p className="text-red-500 text-sm">{error}</p>}

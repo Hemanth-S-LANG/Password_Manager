@@ -40,6 +40,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       deleteCredential(message.id).then(sendResponse);
       break;
 
+    case "MARK_USED":                                   // NEW — called after autofill
+      markCredentialUsed(message.id).then(sendResponse);
+      break;
+
     case "SAVE_CREDENTIAL_CONFIRMED":
       saveCredential(message.payload).then(sendResponse);
       break;
@@ -66,6 +70,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       break;
     }
+    case "GET_LOGIN_LOG":
+      getLoginLog().then(sendResponse);
+      break;
+    case "CLEAR_LOGIN_LOG":
+      clearLoginLog().then(sendResponse);
+      break;
+    case "REFRESH_BADGE":
+      updateBadge().then(() => sendResponse({ ok: true }));
+      break;
+    case "SET_ICON_STATE":
+      setIconState(message.state);
+      sendResponse({ ok: true });
+      break;
+    case "CHECK_BACKEND":
+      checkBackendHealth().then(sendResponse);
+      break;
+
     default:
       sendResponse({ error: "Unknown message type" });
   }
@@ -100,7 +121,9 @@ async function saveCredential(payload) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return { ok: true, data: await res.json() };
+    const data = await res.json();
+    updateBadge(); // refresh badge after new credential saved
+    return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -137,6 +160,7 @@ async function deleteCredential(id) {
   try {
     const res = await fetch(`${API_BASE}/credentials/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    updateBadge(); // refresh badge after credential deleted
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -174,6 +198,8 @@ async function verifyMaster(password) {
     if (res.ok && data.success) {
       // Reset everything on success
       await setStorage({ failedAttempts: 0, lockoutUntil: 0, lockoutCount: 0 });
+      await appendLoginLog({ timestamp: Date.now(), success: true });
+      setIconState("unlocked");
       return { ok: true, data };
     }
 
@@ -190,10 +216,13 @@ async function verifyMaster(password) {
         lockoutUntil: newLockoutUntil,
         lockoutCount: lockoutCount + 1,
       });
+      await appendLoginLog({ timestamp: Date.now(), success: false, locked: true, lockoutUntil: newLockoutUntil });
+      setIconState("locked");
       return { ok: false, locked: true, lockoutUntil: newLockoutUntil };
     }
 
     await setStorage({ failedAttempts: newAttempts, lockoutUntil: 0, lockoutCount });
+    await appendLoginLog({ timestamp: Date.now(), success: false, attemptsLeft });
     return { ok: false, attemptsLeft };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -216,6 +245,197 @@ async function getAuthStatus() {
     const data = await res.json();
     return { ok: true, data };
   } catch (err) {
+    setIconState("offline");
     return { ok: false, error: err.message };
+  }
+}
+
+// NEW — called when content.js or popup autofills a credential
+async function markCredentialUsed(id) {
+  try {
+    const res = await fetch(`${API_BASE}/credentials/${id}/used`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return { ok: true, data: await res.json() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 1 — BADGE ALERTS
+// Shows a red badge on the extension icon with a count of stale (>90d) + weak
+// passwords so the user sees issues passively without opening the vault.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NINETY_DAYS = 90 * 24 * 60 * 60 * 1000;
+
+function isWeakPassword(pwd) {
+  return !(
+    pwd.length >= 8 &&
+    /[A-Z]/.test(pwd) &&
+    /[0-9]/.test(pwd) &&
+    /[^A-Za-z0-9]/.test(pwd)
+  );
+}
+
+async function updateBadge() {
+  try {
+    const res = await fetch(`${API_BASE}/credentials`);
+    if (!res.ok) { clearBadge(); return; }
+    const creds = await res.json();
+    const now = Date.now();
+
+    // Count unique credentials that are stale OR weak (avoid double-counting)
+    const flagged = creds.filter((c) => {
+      const stale = (now - new Date(c.createdAt)) > NINETY_DAYS;
+      const weak  = isWeakPassword(c.password);
+      return stale || weak;
+    });
+
+    const count = flagged.length;
+    if (count === 0) {
+      clearBadge();
+    } else {
+      chrome.action.setBadgeText({ text: count > 99 ? "99+" : String(count) });
+      chrome.action.setBadgeBackgroundColor({ color: "#ef4444" }); // red-500
+    }
+  } catch {
+    // Backend offline — clear badge, don't show stale number
+    clearBadge();
+  }
+}
+
+function clearBadge() {
+  chrome.action.setBadgeText({ text: "" });
+}
+
+// Run badge update on extension startup
+updateBadge();
+
+// Also run badge update every 30 minutes via chrome.alarms
+// (Service workers can be killed; alarms wake them back up)
+chrome.alarms.create("badgeRefresh", { periodInMinutes: 30 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "badgeRefresh") updateBadge();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 2 — LOGIN ATTEMPT LOG
+// Stores the last 50 master password attempts in chrome.storage.local.
+// Each entry: { timestamp, success, attemptsLeft?, locked? }
+// Exposed via GET_LOGIN_LOG message so the React dashboard can read it.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MAX_LOG_ENTRIES = 50;
+
+async function appendLoginLog(entry) {
+  const { loginLog = [] } = await getStorage(["loginLog"]);
+  const updated = [entry, ...loginLog].slice(0, MAX_LOG_ENTRIES);
+  await setStorage({ loginLog: updated });
+}
+
+async function getLoginLog() {
+  const { loginLog = [] } = await getStorage(["loginLog"]);
+  return { ok: true, data: loginLog };
+}
+
+async function clearLoginLog() {
+  await setStorage({ loginLog: [] });
+  return { ok: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: EXTENSION ICON STATE
+// Draws a 16×16 colored circle using ImageData and sets it via chrome.action.setIcon.
+// States: "locked" (gray) | "unlocked" (green) | "offline" (red)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ICON_COLORS = {
+  locked:   { bg: [99,  102, 241, 255], fg: [255, 255, 255, 255] }, // indigo
+  unlocked: { bg: [34,  197, 94,  255], fg: [255, 255, 255, 255] }, // green
+  offline:  { bg: [239, 68,  68,  255], fg: [255, 255, 255, 255] }, // red
+};
+
+function drawIconImageData(state) {
+  const size   = 16;
+  const data   = new Uint8ClampedArray(size * size * 4);
+  const colors = ICON_COLORS[state] || ICON_COLORS.locked;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r  = size / 2 - 1;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+      const dist = Math.sqrt((x - cx + 0.5) ** 2 + (y - cy + 0.5) ** 2);
+      if (dist <= r) {
+        data[idx]     = colors.bg[0];
+        data[idx + 1] = colors.bg[1];
+        data[idx + 2] = colors.bg[2];
+        data[idx + 3] = colors.bg[3];
+      } else {
+        // Transparent outside circle
+        data[idx + 3] = 0;
+      }
+    }
+  }
+  return { imageData: { data: Array.from(data), width: size, height: size } };
+}
+
+function setIconState(state) {
+  try {
+    const { imageData } = drawIconImageData(state);
+    // Convert plain object back to ImageData-compatible for chrome.action.setIcon
+    const size = imageData.width;
+    const raw  = new Uint8ClampedArray(imageData.data);
+
+    // chrome.action.setIcon accepts { imageData: ImageData }
+    // In service workers we use OffscreenCanvas if available, else path fallback
+    if (typeof OffscreenCanvas !== "undefined") {
+      const canvas = new OffscreenCanvas(size, size);
+      const ctx    = canvas.getContext("2d");
+      const id     = new ImageData(raw, size, size);
+      ctx.putImageData(id, 0, 0);
+      canvas.convertToBlob().then((blob) => {
+        createImageBitmap(blob).then((bitmap) => {
+          const c2   = new OffscreenCanvas(size, size);
+          const ctx2 = c2.getContext("2d");
+          ctx2.drawImage(bitmap, 0, 0);
+          chrome.action.setIcon({ imageData: ctx2.getImageData(0, 0, size, size) });
+        });
+      });
+    } else {
+      // Fallback: use badge color to signal state when ImageData unavailable
+      const badgeColors = { locked: "#6366f1", unlocked: "#22c55e", offline: "#ef4444" };
+      chrome.action.setBadgeBackgroundColor({ color: badgeColors[state] || "#6366f1" });
+    }
+  } catch (e) {
+    // Never crash the service worker over an icon update
+    console.warn("[KeyVault] setIconState failed:", e.message);
+  }
+}
+
+// Set icon to locked on startup
+setIconState("locked");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: BACKEND HEALTH CHECK
+// Used by popup to check if server is reachable before showing lock screen.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function checkBackendHealth() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`${API_BASE}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return { ok: res.ok };
+  } catch {
+    return { ok: false };
   }
 }

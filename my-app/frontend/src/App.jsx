@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import LoginScreen from "./components/LoginScreen";
 import Dashboard from "./pages/Dashboard";
+import OnboardingWizard from "./components/OnboardingWizard";
 import { getAuthStatus } from "./api/auth";
 
 const INACTIVITY_MS = 5 * 60 * 1000;
@@ -46,7 +47,30 @@ export default function App() {
     );
   }
 
-  if (status === "first-time") return <LoginScreen isFirstTime={true}  onUnlock={() => setStatus("unlocked")} />;
-  if (status === "locked")     return <LoginScreen isFirstTime={false} onUnlock={() => setStatus("unlocked")} />;
+  // Backend says no master password exists yet → straight to wizard
+  if (status === "first-time") {
+    return <OnboardingWizard onFinish={() => setStatus("unlocked")} />;
+  }
+
+  // User manually clicked "First time?" on the lock screen
+  if (status === "onboarding") {
+    return (
+      <OnboardingWizard
+        onFinish={() => setStatus("unlocked")}
+        onCancel={() => setStatus("locked")}
+      />
+    );
+  }
+
+  if (status === "locked") {
+    return (
+      <LoginScreen
+        isFirstTime={false}
+        onUnlock={() => setStatus("unlocked")}
+        onStartOnboarding={() => setStatus("onboarding")}
+      />
+    );
+  }
+
   return <Dashboard onLock={() => setStatus("locked")} />;
 }

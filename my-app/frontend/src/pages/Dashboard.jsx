@@ -6,6 +6,7 @@ import CredentialList from "../components/CredentialList";
 import AddCredentialModal from "../components/AddCredentialModal";
 import ChangeMasterPasswordModal from "../components/ChangeMasterPasswordModal";
 import Toast from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 import AnalyticsDashboard from "../components/AnalyticsDashboard";   // NEW
 import { fetchCredentials, addCredential, updateCredential, deleteCredential } from "../api/credentials";
 
@@ -56,6 +57,7 @@ export default function Dashboard({ onLock }) {
   const [showChangePwd, setShowChangePwd] = useState(false);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [confirmModal, setConfirmModal] = useState(null);
 
   // Set of passwords used more than once across different sites
   const reusedPasswords = new Set(
@@ -96,27 +98,41 @@ export default function Dashboard({ onLock }) {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete this credential?")) return;
-    try {
-      await deleteCredential(id);
-      setCredentials((prev) => prev.filter((c) => c._id !== id));
-      showToast("Credential deleted");
-    } catch {
-      showToast("Failed to delete", "error");
-    }
+    setConfirmModal({
+      title: "Delete credential?",
+      message: "This credential will be permanently removed from your vault.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteCredential(id);
+          setCredentials((prev) => prev.filter((c) => c._id !== id));
+          showToast("Credential deleted");
+        } catch {
+          showToast("Failed to delete", "error");
+        }
+      },
+    });
   }
 
   // Bulk delete — receives array of ids and a callback to exit bulk mode
   async function handleBulkDelete(ids, onDone) {
-    if (!window.confirm(`Delete ${ids.length} credential${ids.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
-    try {
-      await Promise.all(ids.map((id) => deleteCredential(id)));
-      setCredentials((prev) => prev.filter((c) => !ids.includes(c._id)));
-      showToast(`${ids.length} credential${ids.length > 1 ? "s" : ""} deleted`);
-      onDone?.();
-    } catch {
-      showToast("Failed to delete some credentials", "error");
-    }
+    setConfirmModal({
+      title: `Delete ${ids.length} credential${ids.length > 1 ? "s" : ""}?`,
+      message: "These credentials will be permanently removed. This cannot be undone.",
+      confirmLabel: `Delete ${ids.length}`,
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await Promise.all(ids.map((id) => deleteCredential(id)));
+          setCredentials((prev) => prev.filter((c) => !ids.includes(c._id)));
+          showToast(`${ids.length} credential${ids.length > 1 ? "s" : ""} deleted`);
+          onDone?.();
+        } catch {
+          showToast("Failed to delete some credentials", "error");
+        }
+      },
+    });
   }
 
   // Bulk move — update category for all selected ids
@@ -283,6 +299,12 @@ export default function Dashboard({ onLock }) {
           onSuccess={() => showToast("Master password updated successfully")} />
       )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {confirmModal && (
+        <ConfirmModal
+          {...confirmModal}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
     </div>
   );
 }

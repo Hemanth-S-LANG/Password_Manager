@@ -484,21 +484,111 @@
     );
   }
 
-  tryAutofill();
-  [1000, 2500, 5000].forEach((d) => setTimeout(tryAutofill, d));
-
-  // Watch for dynamically rendered login forms (SPAs, modals)
-  let mutDebounce = null;
-  new MutationObserver(() => {
-    clearTimeout(mutDebounce);
-    mutDebounce = setTimeout(() => {
-      document.querySelectorAll('input[type="password"]').forEach(watchPasswordField);
-      tryAutofill();
-    }, 400);
-  }).observe(document.body, { childList: true, subtree: true });
-
-  // Watch existing password fields
+  // ── Initial scan ──────────────────────────────────────────────────────────
+  // Watch fields already in the DOM (static pages, server-rendered forms)
   document.querySelectorAll('input[type="password"]').forEach(watchPasswordField);
+
+  // Staggered autofill attempts — catches forms that load with a slight delay
+  tryAutofill();
+  [800, 2000, 4000].forEach((d) => setTimeout(tryAutofill, d));
+
+  // ── MutationObserver — SPA / dynamic form detection ───────────────────────
+  // Fires whenever the DOM changes. Debounced to avoid flooding on busy pages.
+  // This makes autofill work on Gmail, GitHub, LinkedIn, Notion, Twitter etc.
+
+  let _mutDebounce  = null;
+  let _lastUrl      = location.href;
+
+  function scanForms() {
+    // Watch any newly injected password fields
+    document.querySelectorAll('input[type="password"]').forEach(watchPasswordField);
+
+    // Also watch username-style fields that might appear before the password field
+    // (multi-step logins like Google — email first, password on next screen)
+    const usernameSelectors = [
+      'input[type="email"]',
+      'input[autocomplete="username"]',
+      'input[autocomplete="email"]',
+      'input[name*="user" i]',
+      'input[name*="email" i]',
+      'input[name*="login" i]',
+    ];
+    usernameSelectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (el.__kvUsernameWatching) return;
+        el.__kvUsernameWatching = true;
+        // When user fills in email and moves on, capture it immediately
+        el.addEventListener("blur", () => {
+          const val = el.value.trim();
+          if (val) snapshot = { ...snapshot, username: val };
+        });
+      });
+    });
+
+    tryAutofill();
+  }
+
+  const _observer = new MutationObserver((mutations) => {
+    // Quick check — only proceed if any mutation added nodes
+    const hasNewNodes = mutations.some((m) => m.addedNodes.length > 0);
+    if (!hasNewNodes) return;
+
+    clearTimeout(_mutDebounce);
+    _mutDebounce = setTimeout(scanForms, 350);
+  });
+
+  _observer.observe(document.body, {
+    childList: true,
+    subtree:   true,
+    // Don't watch attribute changes — too noisy on most pages
+  });
+
+  // ── SPA URL change detection ───────────────────────────────────────────────
+  // SPAs (React Router, Next.js, Angular, Vue Router) navigate by changing
+  // history.pushState without a full page reload. The MutationObserver catches
+  // DOM changes but we also need to reset autofillDone when the URL changes,
+  // otherwise the autofill banner never shows on the new page.
+
+  function handleUrlChange() {
+    const currentUrl = location.href;
+    if (currentUrl === _lastUrl) return;
+    _lastUrl = currentUrl;
+
+    // Reset autofill state for the new "page"
+    autofillDone = false;
+
+    // Give the SPA a moment to render the new page's DOM
+    setTimeout(scanForms, 500);
+    setTimeout(scanForms, 1500);
+  }
+
+  // popstate fires for back/forward navigation
+  window.addEventListener("popstate", handleUrlChange);
+
+  // hashchange fires for hash-based routing (#/login)
+  window.addEventListener("hashchange", handleUrlChange);
+
+  // Intercept history.pushState and history.replaceState
+  // These are the methods SPAs use for client-side navigation
+  (function patchHistory() {
+    const orig_push    = history.pushState.bind(history);
+    const orig_replace = history.replaceState.bind(history);
+
+    history.pushState = function (...args) {
+      orig_push(...args);
+      handleUrlChange();
+    };
+    history.replaceState = function (...args) {
+      orig_replace(...args);
+      handleUrlChange();
+    };
+  })();
+
+  // Polling fallback — catches any URL changes we missed (some SPAs use
+  // direct location.href assignment which can't be intercepted)
+  setInterval(() => {
+    if (location.href !== _lastUrl) handleUrlChange();
+  }, 1500);
 
   // ── Password suggestion banner ────────────────────────────────────────────
 

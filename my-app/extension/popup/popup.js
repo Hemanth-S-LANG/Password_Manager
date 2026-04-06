@@ -87,6 +87,7 @@ function getFavicon(site) {
 
 // ── Lock / Unlock ─────────────────────────────────────────────────────────────
 function showLockScreen() {
+  stopIdleLock(); // cancel any pending idle lock timer
   lockScreen.classList.remove("hidden");
   mainScreen.classList.add("hidden");
   document.getElementById("offline-screen").classList.add("hidden");
@@ -103,6 +104,8 @@ function showMainScreen() {
   loadCredentials();
   // Move focus to search so keyboard users can start immediately
   setTimeout(() => searchInput.focus(), 50);
+  // Start idle auto-lock timer
+  startIdleLock();
 }
 
 function showOfflineScreen() {
@@ -496,21 +499,88 @@ function trapFocus(e) {
   }
 }
 
+// ── Styled confirm modal (replaces native confirm()) ─────────────────────────
+function showConfirmModal({ title, message, confirmLabel = "Delete", onConfirm }) {
+  document.getElementById("kv-confirm-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "kv-confirm-modal";
+  modal.style.cssText = [
+    "position:fixed;inset:0;z-index:2147483647;",
+    "display:flex;align-items:center;justify-content:center;padding:16px;",
+    "background:rgba(0,0,0,0.65);backdrop-filter:blur(2px);",
+  ].join("");
+
+  modal.innerHTML = `
+    <div style="background:#111827;border:1px solid #374151;border-radius:16px;
+      width:100%;max-width:320px;box-shadow:0 24px 48px rgba(0,0,0,.6);
+      font-family:system-ui,sans-serif;overflow:hidden;">
+      <div style="padding:20px 20px 16px;display:flex;align-items:flex-start;gap:12px;">
+        <div style="width:36px;height:36px;border-radius:10px;background:#450a0a;
+          display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="18" height="18" fill="none" stroke="#f87171" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <div style="color:#f9fafb;font-size:14px;font-weight:600;margin-bottom:4px;">${title}</div>
+          ${message ? `<div style="color:#9ca3af;font-size:12px;line-height:1.5;">${message}</div>` : ""}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;padding:0 20px 20px;">
+        <button id="kv-modal-cancel" style="flex:1;background:#1f2937;color:#d1d5db;border:1px solid #374151;
+          border-radius:10px;padding:9px;cursor:pointer;font-size:13px;font-weight:500;">
+          Cancel
+        </button>
+        <button id="kv-modal-confirm" style="flex:1;background:#dc2626;color:#fff;border:none;
+          border-radius:10px;padding:9px;cursor:pointer;font-size:13px;font-weight:600;">
+          ${confirmLabel}
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+
+  // Focus confirm button for keyboard accessibility
+  setTimeout(() => modal.querySelector("#kv-modal-confirm")?.focus(), 50);
+
+  function close() { modal.remove(); }
+  modal.querySelector("#kv-modal-cancel").onclick  = close;
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  document.addEventListener("keydown", function esc(e) {
+    if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
+  });
+  modal.querySelector("#kv-modal-confirm").onclick = () => {
+    close();
+    onConfirm?.();
+  };
+}
+
 // ── Delete ────────────────────────────────────────────────────────────────────
-async function deleteCredential(id, cardEl, onSuccess) {
-  if (!confirm(t("confirmDelete"))) return;
-  const res = await sendMsg({ type: "DELETE_CREDENTIAL", id });
-  if (res?.ok) {
-    allCredentials = allCredentials.filter((c) => c._id !== id);
-    credCount.textContent = allCredentials.length;
-    credCount.setAttribute("aria-label", `${allCredentials.length} credentials stored`);
-    if (cardEl) cardEl.remove();
-    renderList();
-    if (onSuccess) onSuccess();
-    showToast(t("deleted"));
-  } else {
-    showToast(t("deleteFailed"));
-  }
+function deleteCredential(id, cardEl, onSuccess) {
+  showConfirmModal({
+    title: "Delete credential?",
+    message: "This will be permanently removed from your vault.",
+    confirmLabel: "Delete",
+    onConfirm: async () => {
+      const res = await sendMsg({ type: "DELETE_CREDENTIAL", id });
+      if (res?.ok) {
+        allCredentials = allCredentials.filter((c) => c._id !== id);
+        credCount.textContent = allCredentials.length;
+        credCount.setAttribute("aria-label", `${allCredentials.length} credentials stored`);
+        if (cardEl) cardEl.remove();
+        renderList();
+        if (onSuccess) onSuccess();
+        showToast(t("deleted"));
+      } else {
+        showToast(t("deleteFailed"));
+      }
+    },
+  });
 }
 
 // ── Autofill into active tab ──────────────────────────────────────────────────
@@ -640,3 +710,90 @@ const _origRenderList = renderList;
     if (idx !== -1) credList._lastFocusedIdx = idx;
   });
 })();
+
+// ── Popup idle auto-lock ──────────────────────────────────────────────────────
+// Locks the popup after 2 minutes of inactivity while the main screen is visible.
+// Shows a visible countdown in the header during the last 30 seconds.
+// Resets on any mouse move, click, or keypress inside the popup.
+
+const POPUP_IDLE_MS      = 2 * 60 * 1000; // 2 minutes total
+const POPUP_WARN_MS      = 30 * 1000;      // show countdown in last 30 seconds
+let   _idleTimer         = null;
+let   _warnTimer         = null;
+let   _warnInterval      = null;
+let   _idleActive        = false;
+
+function startIdleLock() {
+  _idleActive = true;
+  resetIdleTimer();
+
+  // Listen for any activity inside the popup
+  ["mousemove", "mousedown", "keydown", "scroll", "touchstart"].forEach((ev) => {
+    document.addEventListener(ev, resetIdleTimer, { passive: true });
+  });
+}
+
+function stopIdleLock() {
+  _idleActive = false;
+  clearTimeout(_idleTimer);
+  clearTimeout(_warnTimer);
+  clearInterval(_warnInterval);
+  hideIdleWarning();
+  ["mousemove", "mousedown", "keydown", "scroll", "touchstart"].forEach((ev) => {
+    document.removeEventListener(ev, resetIdleTimer);
+  });
+}
+
+function resetIdleTimer() {
+  if (!_idleActive) return;
+  clearTimeout(_idleTimer);
+  clearTimeout(_warnTimer);
+  clearInterval(_warnInterval);
+  hideIdleWarning();
+
+  // After (POPUP_IDLE_MS - POPUP_WARN_MS) of idle, start the warning countdown
+  _warnTimer = setTimeout(() => {
+    showIdleWarning(Math.floor(POPUP_WARN_MS / 1000));
+  }, POPUP_IDLE_MS - POPUP_WARN_MS);
+
+  // After full POPUP_IDLE_MS, lock
+  _idleTimer = setTimeout(() => {
+    stopIdleLock();
+    showLockScreen();
+    showToast("Vault locked due to inactivity");
+  }, POPUP_IDLE_MS);
+}
+
+function showIdleWarning(secondsLeft) {
+  let el = document.getElementById("kv-idle-warn");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "kv-idle-warn";
+    el.style.cssText = [
+      "position:fixed;bottom:12px;left:50%;transform:translateX(-50%);",
+      "background:#1e1b4b;border:1px solid #f59e0b;border-radius:10px;",
+      "padding:6px 14px;font-size:11px;color:#fbbf24;",
+      "display:flex;align-items:center;gap:6px;z-index:9999;",
+      "white-space:nowrap;pointer-events:none;",
+    ].join("");
+    el.innerHTML = '<span style="font-size:14px">⏱</span><span id="kv-idle-countdown"></span>';
+    document.body.appendChild(el);
+  }
+
+  let secs = secondsLeft;
+  const countEl = document.getElementById("kv-idle-countdown");
+  if (countEl) countEl.textContent = `Locking in ${secs}s due to inactivity`;
+
+  _warnInterval = setInterval(() => {
+    secs--;
+    if (countEl) countEl.textContent = `Locking in ${secs}s due to inactivity`;
+    if (secs <= 0) clearInterval(_warnInterval);
+  }, 1000);
+}
+
+function hideIdleWarning() {
+  const el = document.getElementById("kv-idle-warn");
+  if (el) el.remove();
+}
+
+// Idle lock is wired directly into showMainScreen and showLockScreen above.

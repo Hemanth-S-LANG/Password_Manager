@@ -45,7 +45,7 @@ function getStrength(pwd) {
 // ── Views ─────────────────────────────────────────────────────────────────────
 // "login" | "setup-questions" | "answer-questions" | "reset-password"
 
-export default function LoginScreen({ isFirstTime, onUnlock }) {
+export default function LoginScreen({ isFirstTime, onUnlock, onStartOnboarding }) {
   const [view, setView]         = useState("login");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -275,6 +275,26 @@ export default function LoginScreen({ isFirstTime, onUnlock }) {
                   className="w-full text-indigo-400 hover:text-indigo-300 text-sm text-center mt-1 transition-colors disabled:opacity-50">
                   Forgot master password?
                 </button>
+              )}
+
+              {/* First time prompt — only shown on lock screen, not during first-time setup */}
+              {!isFirstTime && onStartOnboarding && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800 text-center">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                    New to SecureVault?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onStartOnboarding}
+                    className="inline-flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-400 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Start setup wizard
+                  </button>
+                </div>
               )}
             </form>
           </>

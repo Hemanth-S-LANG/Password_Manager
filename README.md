@@ -263,6 +263,11 @@ Number of strong vs weak passwords
 * Login attempt log. Store a local log of every master password attempt — timestamp, success/failure. Showing this in a "Security Activity" section so the user can see if someone tried to access their vault while they were away.
 * Extension icon state. Change the extension icon color based on state — green when unlocked, gray when locked, red when backend is unreachable using chrome.action.setIcon.
 * Notes field per credential. Adding an optional free-text notes field to the Credential model — useful for storing security questions, account recovery codes, or PINs associated with a credential.
+* Password history per credential. Every time a password is updated, save the previous version with a timestamp in a history array on the Credential model. Lets users recover accidentally overwritten passwords
+* Weekly security digest. Use the same chrome.alarms to fire once a week summarising vault health score, number of issues found. Completely passive — no user action needed
+* Export vault as encrypted JSON. A download button in Dashboard.jsx that exports all credentials as a file. Users have no backup story right now — if MongoDB data is lost, everything is gone.
+* Session lock on tab visibility change
+* Clipboard auto-clear after 30 seconds.
 
 
 ---

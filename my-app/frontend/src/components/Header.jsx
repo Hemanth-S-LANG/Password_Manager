@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "../context/ThemeContext";
 
-export default function Header({ credentialCount, onAdd, onLock, onChangePassword }) {
+export default function Header({ credentialCount, onAdd, onLock, onChangePassword, onExport }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const { theme, toggleTheme } = useTheme();
@@ -78,6 +78,17 @@ export default function Header({ credentialCount, onAdd, onLock, onChangePasswor
                       d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                   </svg>
                   Change Master Password
+                </button>
+                <div className="border-t border-gray-200 dark:border-gray-800" />
+                <button
+                  onClick={() => { setMenuOpen(false); onExport?.(); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export Vault Backup
                 </button>
                 <div className="border-t border-gray-200 dark:border-gray-800" />
                 <button

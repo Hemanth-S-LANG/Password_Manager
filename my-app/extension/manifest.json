@@ -10,7 +10,8 @@
     "scripting",
     "tabs",
     "unlimitedStorage",
-    "alarms"
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"

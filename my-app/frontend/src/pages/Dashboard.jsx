@@ -7,6 +7,7 @@ import AddCredentialModal from "../components/AddCredentialModal";
 import ChangeMasterPasswordModal from "../components/ChangeMasterPasswordModal";
 import Toast from "../components/Toast";
 import ConfirmModal from "../components/ConfirmModal";
+import PasswordHistoryModal from "../components/PasswordHistoryModal";
 import AnalyticsDashboard from "../components/AnalyticsDashboard";   // NEW
 import { fetchCredentials, addCredential, updateCredential, deleteCredential } from "../api/credentials";
 
@@ -58,6 +59,7 @@ export default function Dashboard({ onLock }) {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmModal, setConfirmModal] = useState(null);
+  const [historyCredential, setHistoryCredential] = useState(null);
 
   // Set of passwords used more than once across different sites
   const reusedPasswords = new Set(
@@ -83,6 +85,81 @@ export default function Dashboard({ onLock }) {
 
   function showToast(message, type = "success") {
     setToast({ message, type });
+  }
+
+  // ── Export vault as encrypted JSON ─────────────────────────────────────────
+  // Uses the Web Crypto API to AES-GCM encrypt all credentials client-side.
+  // The user sets an export password — nothing is sent to the server.
+  async function handleExport() {
+    const exportPassword = window.prompt(
+      "Set an export password to encrypt your vault backup.You will need this password to restore.",
+    );
+    if (!exportPassword) return;
+    if (exportPassword.length < 4) {
+      showToast("Export password must be at least 4 characters", "error");
+      return;
+    }
+
+    try {
+      // Derive an AES-GCM key from the export password using PBKDF2
+      const enc      = new TextEncoder();
+      const keyMat   = await crypto.subtle.importKey(
+        "raw", enc.encode(exportPassword), "PBKDF2", false, ["deriveKey"]
+      );
+      const salt     = crypto.getRandomValues(new Uint8Array(16));
+      const key      = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMat,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt"]
+      );
+
+      // Build the payload
+      const payload = JSON.stringify({
+        version:    1,
+        exportedAt: new Date().toISOString(),
+        count:      credentials.length,
+        credentials: credentials.map((c) => ({
+          website:  c.website,
+          username: c.username,
+          password: c.password,
+          category: c.category,
+          notes:    c.notes || "",
+          createdAt: c.createdAt,
+        })),
+      });
+
+      // Encrypt
+      const iv        = crypto.getRandomValues(new Uint8Array(12));
+      const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        enc.encode(payload)
+      );
+
+      // Encode everything as base64 for the JSON file
+      const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+      const exportData = JSON.stringify({
+        _kv:       "SecureVault Encrypted Backup v1",
+        salt:      toB64(salt),
+        iv:        toB64(iv),
+        encrypted: toB64(encrypted),
+      }, null, 2);
+
+      // Trigger download
+      const blob = new Blob([exportData], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `securevault-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast(`Vault exported — ${credentials.length} credentials saved`);
+    } catch (err) {
+      showToast("Export failed: " + err.message, "error");
+    }
   }
 
   async function handleSave(form, id) {
@@ -164,6 +241,16 @@ export default function Dashboard({ onLock }) {
     setShowModal(true);
   }
 
+  async function handleRestorePassword(credential, oldPassword) {
+    try {
+      const { data } = await updateCredential(credential._id, { ...credential, password: oldPassword });
+      setCredentials((prev) => prev.map((c) => (c._id === credential._id ? data : c)));
+      showToast(`Password restored for ${credential.website}`);
+    } catch {
+      showToast("Failed to restore password", "error");
+    }
+  }
+
   // Rename a custom category across all credentials that use it
   async function handleRenameCategory(oldName, newName) {
     if (!newName || newName === oldName) return;
@@ -228,6 +315,7 @@ export default function Dashboard({ onLock }) {
         onAdd={() => setShowModal(true)}
         onLock={onLock}
         onChangePassword={() => setShowChangePwd(true)}
+        onExport={handleExport}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -286,7 +374,9 @@ export default function Dashboard({ onLock }) {
                 </div>
               ) : (
                 <CredentialList credentials={credentials} search={search} activeCategory={activeCategory}
-                  onDelete={handleDelete} onEdit={handleEdit} onBulkDelete={handleBulkDelete} onBulkMove={handleBulkMove} reusedPasswords={reusedPasswords} />
+                  onDelete={handleDelete} onEdit={handleEdit} onBulkDelete={handleBulkDelete} onBulkMove={handleBulkMove}
+                  reusedPasswords={reusedPasswords} onAdd={() => setShowModal(true)}
+                  onHistory={(cred) => setHistoryCredential(cred)} />
               )}
             </div>
           </div>
@@ -303,6 +393,13 @@ export default function Dashboard({ onLock }) {
         <ConfirmModal
           {...confirmModal}
           onClose={() => setConfirmModal(null)}
+        />
+      )}
+      {historyCredential && (
+        <PasswordHistoryModal
+          credential={historyCredential}
+          onClose={() => setHistoryCredential(null)}
+          onRestore={handleRestorePassword}
         />
       )}
     </div>

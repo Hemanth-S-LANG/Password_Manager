@@ -11,6 +11,11 @@ const credentialSchema = new mongoose.Schema(
     notes:        { type: String, default: "", trim: true },
     lastUsedAt:   { type: Date, default: null },
     autofillCount:{ type: Number, default: 0 },
+    // Password history — last 10 versions saved on every update
+    passwordHistory: [{
+      password:  { type: String, required: true }, // AES encrypted
+      changedAt: { type: Date, default: Date.now },
+    }],
   },
   { timestamps: true } // createdAt = added date, updatedAt = last modified
 );

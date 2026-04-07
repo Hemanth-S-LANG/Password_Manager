@@ -26,16 +26,20 @@ function decrypt(stored) {
 // Map a Credential doc to a safe response object
 function toResponse(c, plainPassword) {
   return {
-    _id:           c._id,
-    website:       c.website,
-    username:      c.username,
-    password:      plainPassword,
-    category:      c.category,
-    notes:         c.notes || "",        // ← notes field
-    createdAt:     c.createdAt,
-    updatedAt:     c.updatedAt,
-    lastUsedAt:    c.lastUsedAt  || null,
-    autofillCount: c.autofillCount || 0,
+    _id:             c._id,
+    website:         c.website,
+    username:        c.username,
+    password:        plainPassword,
+    category:        c.category,
+    notes:           c.notes || "",
+    createdAt:       c.createdAt,
+    updatedAt:       c.updatedAt,
+    lastUsedAt:      c.lastUsedAt  || null,
+    autofillCount:   c.autofillCount || 0,
+    passwordHistory: (c.passwordHistory || []).map((h) => ({
+      password:  decrypt(h.password),
+      changedAt: h.changedAt,
+    })),
   };
 }
 
@@ -152,18 +156,32 @@ export async function addCredential(req, res) {
 // PUT /api/credentials/:id
 export async function updateCredential(req, res) {
   try {
-    const { website, username, password, category, notes } = req.body;  // ← notes
+    const { website, username, password, category, notes } = req.body;
+    const existing = await Credential.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Credential not found" });
+
+    // Save the current password to history if it changed
+    const historyEntry = [];
+    if (existing.password !== encrypt(password)) {
+      // Keep last 10 versions — prepend current before overwriting
+      const newEntry   = { password: existing.password, changedAt: new Date() };
+      const oldHistory = existing.passwordHistory || [];
+      historyEntry.push(...[newEntry, ...oldHistory].slice(0, 10));
+    } else {
+      historyEntry.push(...(existing.passwordHistory || []));
+    }
+
     const updated = await Credential.findByIdAndUpdate(
       req.params.id,
       {
         website, username,
-        password: encrypt(password),
-        category: category || "Others",
-        notes:    notes    || "",        // ← notes
+        password:        encrypt(password),
+        category:        category || "Others",
+        notes:           notes    || "",
+        passwordHistory: historyEntry,
       },
       { new: true }
     );
-    if (!updated) return res.status(404).json({ error: "Credential not found" });
     res.json(toResponse(updated, password));
   } catch {
     res.status(500).json({ error: "Failed to update credential" });

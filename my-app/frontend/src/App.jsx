@@ -4,14 +4,17 @@ import Dashboard from "./pages/Dashboard";
 import OnboardingWizard from "./components/OnboardingWizard";
 import { getAuthStatus } from "./api/auth";
 
-const INACTIVITY_MS = 5 * 60 * 1000;
+const INACTIVITY_MS    = 5 * 60 * 1000; // 5 min inactivity lock
+const HIDDEN_LOCK_MS   = 2 * 60 * 1000; // 2 min after tab hidden
 
 export default function App() {
-  const [status, setStatus] = useState("loading");
-  const timerRef = useRef(null);
+  const [status, setStatus]       = useState("loading");
+  const timerRef                  = useRef(null);
+  const hiddenTimerRef            = useRef(null);
 
   useEffect(() => { checkAuthStatus(); }, []);
 
+  // ── Inactivity lock ──────────────────────────────────────────────────────
   useEffect(() => {
     if (status !== "unlocked") return;
     function resetTimer() {
@@ -27,6 +30,29 @@ export default function App() {
       window.removeEventListener("keydown",   resetTimer);
       window.removeEventListener("click",     resetTimer);
       clearTimeout(timerRef.current);
+    };
+  }, [status]);
+
+  // ── Visibility lock — locks after 2 min when tab becomes hidden ──────────
+  useEffect(() => {
+    if (status !== "unlocked") return;
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        // Tab hidden — start 2-minute countdown
+        hiddenTimerRef.current = setTimeout(() => {
+          setStatus("locked");
+        }, HIDDEN_LOCK_MS);
+      } else {
+        // Tab visible again — cancel the countdown
+        clearTimeout(hiddenTimerRef.current);
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearTimeout(hiddenTimerRef.current);
     };
   }, [status]);
 

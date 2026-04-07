@@ -21,14 +21,48 @@ function getPasswordAge(createdAt) {
   return { days, label, color, urgent };
 }
 
+const CLIPBOARD_CLEAR_SECS = 30; // auto-clear password after 30 seconds
+
 function useCopy() {
-  const [copied, setCopied] = useState(null);
+  const [copied, setCopied]       = useState(null); // which key was copied
+  const [countdown, setCountdown] = useState(null); // seconds remaining (pwd only)
+  const timerRef    = useState(null);
+  const intervalRef = useState(null);
+
   const copy = async (text, key) => {
     await navigator.clipboard.writeText(text);
     setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+
+    // Clear any existing timers
+    clearTimeout(timerRef[0]);
+    clearInterval(intervalRef[0]);
+
+    if (key === "pwd") {
+      // Start visible countdown for password copies
+      setCountdown(CLIPBOARD_CLEAR_SECS);
+      intervalRef[0] = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(intervalRef[0]);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Auto-clear clipboard and reset state after 30s
+      timerRef[0] = setTimeout(() => {
+        navigator.clipboard.writeText("").catch(() => {});
+        setCopied(null);
+        setCountdown(null);
+      }, CLIPBOARD_CLEAR_SECS * 1000);
+    } else {
+      // Username — just show "Copied!" for 2 seconds, no auto-clear needed
+      timerRef[0] = setTimeout(() => setCopied(null), 2000);
+    }
   };
-  return { copied, copy };
+
+  return { copied, countdown, copy };
 }
 
 const DOMAIN_MAP = {
@@ -82,12 +116,12 @@ function SiteIcon({ website }) {
 }
 
 export default function CredentialCard({
-  credential, onDelete, onEdit, isReused = false,
+  credential, onDelete, onEdit, onHistory, isReused = false,
   // Bulk selection props
   bulkMode = false, isSelected = false, onToggleSelect,
 }) {
   const [showPassword, setShowPassword] = useState(false);
-  const { copied, copy } = useCopy();
+  const { copied, countdown, copy } = useCopy();
   const color = getCategoryColor(credential.category);
   const age   = getPasswordAge(credential.createdAt);
 
@@ -139,7 +173,7 @@ export default function CredentialCard({
           </div>
         </div>
 
-        {/* Edit / Delete — hidden in bulk mode */}
+        {/* Edit / History / Delete — hidden in bulk mode */}
         {!bulkMode && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button onClick={() => onEdit(credential)}
@@ -149,6 +183,15 @@ export default function CredentialCard({
                   d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
+            {onHistory && (credential.passwordHistory?.length > 0) && (
+              <button onClick={() => onHistory(credential)}
+                className="p-1.5 text-gray-400 hover:text-purple-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Password history">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            )}
             <button onClick={() => onDelete(credential._id)}
               className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors" title="Delete">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,8 +255,13 @@ export default function CredentialCard({
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
           <button onClick={() => copy(credential.password, "pwd")}
-            className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0">
-            {copied === "pwd" ? <><CheckIcon /><span className="text-xs text-green-500">Copied!</span></> : <CopyIcon />}
+            className="flex items-center gap-1 px-2 py-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex-shrink-0 min-w-[70px] justify-center"
+            title={countdown ? `Clipboard clears in ${countdown}s` : "Copy password"}>
+            {copied === "pwd" ? (
+              <span className={`text-xs font-medium ${countdown && countdown <= 10 ? "text-amber-500" : "text-green-500"}`}>
+                {countdown ? `🕐 ${countdown}s` : "Copied!"}
+              </span>
+            ) : <CopyIcon />}
           </button>
         </div>
       )}

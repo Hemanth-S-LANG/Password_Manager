@@ -120,7 +120,7 @@ function BulkToolbar({ selectedIds, allIds, onSelectAll, onDeselectAll, onBulkDe
 export default function CredentialList({
   credentials, search, activeCategory,
   onDelete, onEdit, onBulkDelete, onBulkMove,
-  reusedPasswords = new Set(),
+  reusedPasswords = new Set(), onAdd, onHistory,
 }) {
   const [bulkMode, setBulkMode]       = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -168,7 +168,7 @@ export default function CredentialList({
 
   // Empty states
   if (credentials.length === 0) {
-    return <EmptyState icon="key" message="No credentials yet" sub='Click "Add Credential" to get started' />;
+    return <EmptyState icon="key" message="No credentials yet" sub='Click "Add Credential" to get started' onAdd={onAdd} />;
   }
   if (filtered.length === 0) {
     return <EmptyState icon="search" message="No credentials found" sub="Try a different search term or category" />;
@@ -182,6 +182,7 @@ export default function CredentialList({
           credential={cred}
           onDelete={onDelete}
           onEdit={onEdit}
+          onHistory={onHistory}
           isReused={reusedPasswords.has(cred.password)}
           bulkMode={bulkMode}
           isSelected={selectedIds.has(cred._id)}
@@ -276,23 +277,87 @@ export default function CredentialList({
   );
 }
 
-function EmptyState({ icon, message, sub }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
-        {icon === "search" ? (
-          <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+function EmptyState({ icon, message, sub, onAdd }) {
+  if (icon === "search") {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-        ) : (
-          <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-          </svg>
-        )}
+        </div>
+        <p className="text-gray-500 dark:text-gray-400 font-medium">{message}</p>
+        <p className="text-gray-400 dark:text-gray-600 text-sm mt-1">{sub}</p>
       </div>
-      <p className="text-gray-400 font-medium">{message}</p>
-      <p className="text-gray-600 text-sm mt-1">{sub}</p>
+    );
+  }
+
+  // Rich illustrated empty vault state
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center max-w-sm mx-auto">
+      {/* SVG Illustration */}
+      <div className="relative mb-8">
+        <svg width="160" height="140" viewBox="0 0 160 140" fill="none" className="opacity-90">
+          {/* Vault body */}
+          <rect x="30" y="30" width="100" height="85" rx="12" fill="#e0e7ff" className="dark:fill-indigo-900/40" stroke="#818cf8" strokeWidth="2"/>
+          {/* Vault door */}
+          <rect x="45" y="45" width="70" height="55" rx="8" fill="#c7d2fe" className="dark:fill-indigo-800/40" stroke="#6366f1" strokeWidth="1.5"/>
+          {/* Lock circle */}
+          <circle cx="80" cy="68" r="14" fill="#818cf8" className="dark:fill-indigo-600"/>
+          <circle cx="80" cy="68" r="8" fill="#e0e7ff" className="dark:fill-indigo-900"/>
+          {/* Lock keyhole */}
+          <circle cx="80" cy="65" r="3" fill="#818cf8" className="dark:fill-indigo-400"/>
+          <rect x="78.5" y="66" width="3" height="6" rx="1" fill="#818cf8" className="dark:fill-indigo-400"/>
+          {/* Handle */}
+          <rect x="108" y="63" width="6" height="12" rx="3" fill="#6366f1"/>
+          {/* Dial marks */}
+          {[0,60,120,180,240,300].map((deg, i) => {
+            const r = 14; const cx = 80; const cy = 68;
+            const rad = (deg - 90) * Math.PI / 180;
+            const x1 = cx + (r-2) * Math.cos(rad); const y1 = cy + (r-2) * Math.sin(rad);
+            const x2 = cx + r * Math.cos(rad);       const y2 = cy + r * Math.sin(rad);
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#e0e7ff" strokeWidth="1.5" className="dark:stroke-indigo-900"/>;
+          })}
+          {/* Plus icon floating */}
+          <circle cx="118" cy="35" r="16" fill="#22c55e" opacity="0.9"/>
+          <path d="M118 27v16M110 35h16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+          {/* Small decorative dots */}
+          <circle cx="35" cy="25" r="4" fill="#a5b4fc" opacity="0.5"/>
+          <circle cx="130" cy="120" r="5" fill="#818cf8" opacity="0.4"/>
+          <circle cx="25" cy="100" r="3" fill="#6366f1" opacity="0.3"/>
+        </svg>
+      </div>
+
+      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+        Your vault is empty
+      </h3>
+      <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-6">
+        Save your first credential and SecureVault will remember it for every future visit — encrypted and secure.
+      </p>
+
+      {/* Feature hints */}
+      <div className="flex flex-col gap-2 w-full mb-8 text-left">
+        {[
+          { icon: "⚡", text: "Autofill on any website with one click" },
+          { icon: "🔐", text: "AES-256 encrypted before storage" },
+          { icon: "🛡️", text: "Protected by your master password" },
+        ].map(({ icon, text }) => (
+          <div key={text} className="flex items-center gap-2.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
+            <span className="text-base">{icon}</span>
+            <span className="text-xs text-indigo-700 dark:text-indigo-300">{text}</span>
+          </div>
+        ))}
+      </div>
+
+      {onAdd && (
+        <button onClick={onAdd}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors shadow-lg shadow-indigo-500/20">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add your first credential
+        </button>
+      )}
     </div>
   );
 }

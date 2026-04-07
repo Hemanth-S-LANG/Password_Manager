@@ -317,9 +317,12 @@ updateBadge();
 
 // Also run badge update every 30 minutes via chrome.alarms
 // (Service workers can be killed; alarms wake them back up)
-chrome.alarms.create("badgeRefresh", { periodInMinutes: 30 });
+chrome.alarms.create("badgeRefresh",   { periodInMinutes: 30 });
+chrome.alarms.create("weeklyDigest",   { periodInMinutes: 7 * 24 * 60 }); // once a week
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "badgeRefresh") updateBadge();
+  if (alarm.name === "weeklyDigest") sendWeeklyDigest();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -428,14 +431,53 @@ setIconState("locked");
 
 async function checkBackendHealth() {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(`${API_BASE}/health`, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(4000), // 4s timeout
     });
-    clearTimeout(timer);
     return { ok: res.ok };
   } catch {
     return { ok: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: WEEKLY SECURITY DIGEST
+// Fires once a week via chrome.alarms. Fetches vault stats from the backend
+// and shows a native Chrome notification summarising password health.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function sendWeeklyDigest() {
+  try {
+    const res = await fetch(`${API_BASE}/credentials/stats`);
+    if (!res.ok) return;
+    const stats = await res.json();
+    if (!stats || stats.total === 0) return;
+
+    const { total, weak, reused, securityScore } = stats;
+    const issues = weak + reused;
+
+    // Build notification message
+    let message;
+    let title;
+    if (issues === 0) {
+      title   = "🛡️ Your vault looks great!";
+      message = `All ${total} passwords are strong and unique. Security score: ${securityScore}/100.`;
+    } else {
+      title   = `⚠️ ${issues} password${issues > 1 ? "s" : ""} need attention`;
+      message = [
+        weak   > 0 ? `${weak} weak`   : null,
+        reused > 0 ? `${reused} reused` : null,
+      ].filter(Boolean).join(", ") + `. Score: ${securityScore}/100. Open SecureVault to fix them.`;
+    }
+
+    chrome.notifications.create("weeklyDigest_" + Date.now(), {
+      type:    "basic",
+      iconUrl: "icons/icon48.png",
+      title,
+      message,
+      priority: issues > 0 ? 2 : 0,
+    });
+  } catch {
+    // Backend offline — skip silently
   }
 }
